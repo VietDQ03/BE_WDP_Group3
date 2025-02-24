@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { HydratedDocument } from 'mongoose';
+import { Company } from 'src/companies/schemas/company.schemas';
 import { Role } from 'src/roles/schemas/role.schema';
 
 export type UserDocument = HydratedDocument<User>;
@@ -22,19 +23,28 @@ export class User {
     gender: string;
 
     @Prop()
+    avatarUrl: string;
+
+    @Prop()
     address: string;
 
     @Prop({ type: Object })
     company: {
         _id: mongoose.Schema.Types.ObjectId;
-        name: string;
     };
+
 
     @Prop({ type: mongoose.Schema.Types.ObjectId, ref: Role.name })
     role: mongoose.Schema.Types.ObjectId;
 
     @Prop()
+    isActived: boolean;
+
+    @Prop()
     refreshToken: string;
+
+    @Prop({ type: Number, default: 2 }) // Sửa lại định nghĩa này
+    premium: number;
 
     @Prop({ type: Object })
     createdBy: {

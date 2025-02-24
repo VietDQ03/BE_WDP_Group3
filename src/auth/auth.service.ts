@@ -2,11 +2,19 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { UsersService } from 'src/users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import { IUser } from 'src/users/users.interface';
-import { RegisterUserDto } from 'src/users/dto/create-user.dto';
+import { CreateUserDto, RegisterUserDto } from 'src/users/dto/create-user.dto';
 import { ConfigService } from '@nestjs/config';
 import ms from 'ms';
 import { Response } from 'express';
 import { RolesService } from 'src/roles/roles.service';
+import { compareSync, genSaltSync, hashSync } from 'bcryptjs';
+import * as generatePassword from 'generate-password';
+import { UserS } from 'src/decorator/customize';
+import { VerificationService } from 'src/verification/verification.service';
+import { CreateVerificationDto } from 'src/verification/dto/create-verification.dto';
+import { MailService } from 'src/mail/mail.service';
+import { ChangePasswordDto, ForgetPasswordDto } from './dto/changePassword.dto';
+
 
 @Injectable()
 export class AuthService {
@@ -14,15 +22,17 @@ export class AuthService {
         private usersService: UsersService,
         private jwtService: JwtService,
         private configService: ConfigService,
-        private rolesService: RolesService
+        private rolesService: RolesService,
+        private verificationService: VerificationService,
+        private mailService: MailService
     ) { }
 
     //ussername/ pass là 2 tham số thư viện passport nó ném về
     async validateUser(username: string, pass: string): Promise<any> {
         const user = await this.usersService.findOneByUsername(username);
         if (user) {
-            const isValid = this.usersService.isValidPassword(pass, user.password);
-            if (isValid === true) {
+            const isValidPwd = this.usersService.isValidPassword(pass, user.password);
+            if (isValidPwd === true) {
                 const userRole = user.role as unknown as { _id: string; name: string }
                 const temp = await this.rolesService.findOne(userRole._id);
 
@@ -30,7 +40,6 @@ export class AuthService {
                     ...user.toObject(),
                     permissions: temp?.permissions ?? []
                 }
-
                 return objUser;
             }
         }
@@ -39,7 +48,7 @@ export class AuthService {
     }
 
     async login(user: IUser, response: Response) {
-        const { _id, name, email, role, permissions } = user;
+        const { _id, name, email, role, permissions, age, gender, company, address } = user;
         const payload = {
             sub: "token login",
             iss: "from server",
@@ -67,18 +76,104 @@ export class AuthService {
                 name,
                 email,
                 role,
+                age,
+                company,
+                gender,
+                address,
                 permissions
             },
         };
     }
 
+    async validateGoogleUser(googleUser: CreateUserDto) {
+        const user = await this.usersService.findOneByUsername(googleUser.email);
+        if (user) {
+            const userRole = user.role as unknown as { _id: string; name: string }
+            const temp = await this.rolesService.findOne(userRole._id);
+            const objUser = {
+                ...user.toObject(),
+                permissions: temp?.permissions ?? []
+            }
+            return objUser;
+        }
+        googleUser.password = this.generateRandomPassword()
+        googleUser.isActived = true;
+        return await this.usersService.register(googleUser)
+    }
+
     async register(user: RegisterUserDto) {
         let newUser = await this.usersService.register(user);
-
+        await this.mailService.sendVerify(newUser.email)
         return {
             _id: newUser?._id,
             createdAt: newUser?.createdAt
         };
+    }
+
+    async activeAccount(email: string, otp: string) {
+        const isValid = await this.verificationService.validateOtp(email, otp)
+        if (!isValid) {
+            throw new BadRequestException(`Mã OTP không hợp lệ.`)
+        }
+        const redirectUrl = `https://www.facebook.com`;
+        return { message: `${email} has been activated`, redirectUrl };
+    }
+
+    async changePassword(userId: string, changePasswordDto: ChangePasswordDto) {
+        const { oldPassword, newPassword } = changePasswordDto;
+
+        const user = await this.usersService.findOne(userId);
+        if (!user) {
+            throw new BadRequestException('User not found');
+        }
+        const isOldPasswordValid = compareSync(oldPassword, user.password);
+        if (!isOldPasswordValid) {
+            throw new BadRequestException('Old password is incorrect');
+        }
+
+        const hashedNewPassword = this.getHashPassword(newPassword)
+        await this.usersService.updateUserPassword(userId, hashedNewPassword);
+
+        return { message: 'Password changed successfully' };
+    }
+
+    async forgetPassword(userId: string, forgetPasswordDto: ForgetPasswordDto) {
+        const { oldPassword, newPassword } = forgetPasswordDto;
+
+        const user = await this.usersService.findOne(userId);
+        if (!user) {
+            throw new BadRequestException('User not found');
+        }
+        const isOldPasswordValid = compareSync(oldPassword, user.password);
+        if (!isOldPasswordValid) {
+            throw new BadRequestException('Old password is incorrect');
+        }
+        const isOtpValid = await this.verificationService.validateOtp(user.email, forgetPasswordDto.otp)
+        if (!isOtpValid) {
+            throw new BadRequestException('OTP is incorrect');
+        }
+        const hashedNewPassword = this.getHashPassword(newPassword)
+        await this.usersService.updateUserPassword(userId, hashedNewPassword);
+
+        return { message: 'Password changed successfully' };
+    }
+
+    getHashPassword = (password: string) => {
+
+        const salt = genSaltSync(10);
+        const hash = hashSync(password, salt);
+        return hash
+    }
+
+    generateRandomPassword(length: number = 8): string {
+        return generatePassword.generate({
+            length: length,
+            numbers: true,
+            symbols: true,
+            uppercase: true,
+            excludeSimilarCharacters: true,
+            strict: true,
+        });
     }
 
     createRefreshToken = (payload: any) => {

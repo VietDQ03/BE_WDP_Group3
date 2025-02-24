@@ -1,16 +1,20 @@
 export interface IUser {
+  _id: string;
+  name: string;
+  email: string;
+  age: string;
+  gender: boolean;
+  company: string;
+  address: string;
+  role: {
     _id: string;
     name: string;
-    email: string;
-    role: {
-        _id: string;
-        name: string;
-    };
-    permissions?: {
-        _id: string;
-        name: string;
-        apiPath: string;
-        module: string;
-    }[]
-
-    }
+  };
+  permissions?: {
+    _id: string;
+    name: string;
+    apiPath: string;
+    module: string;
+  }[];
+  premium: number;
+}

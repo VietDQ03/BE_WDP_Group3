@@ -18,11 +18,11 @@ export class FilesController {
   @Public()
   @Post('upload')
   @ResponseMessages("Upload Single File")
-  @UseInterceptors(FileInterceptor('fileUpload'))
+  @UseInterceptors(FileInterceptor('fileUpload')) //middleware
   @UseFilters(new HttpExceptionFilter())
   uploadFile(@UploadedFile() file: Express.Multer.File) {
     return {
-      fileName: file.filename
+      url: file.filename
     }
   }
 

@@ -33,12 +33,12 @@ export class UsersService {
   async create(createUserDto: CreateUserDto, @UserS() user: IUser) {
     const {
       name, email, password, age,
-      gender, address, role, company
+      gender, address
     }
       = createUserDto;
-
     //add logic check email
     const isExist = await this.userModel.findOne({ email });
+    const role = await this.roleModel.findOne({ name: "NORMAL_USER" });
     if (isExist) {
       throw new BadRequestException(`Email: ${email} đã tồn tại trên hệ thống. Vui lòng sử dụng email khác.`)
     }
@@ -49,12 +49,14 @@ export class UsersService {
       name, email,
       password: hashPassword,
       age,
-      gender, address, role, company,
+      gender, address, role,
+      premium: 2,
       createdBy: {
         _id: user._id,
         email: user.email
       }
     })
+
     return newUser;
   }
 
@@ -62,12 +64,13 @@ export class UsersService {
     const { name, email, password, age, gender, address } = user;
     //add logic check email
     const isExist = await this.userModel.findOne({ email });
+
     if (isExist) {
       throw new BadRequestException(`Email: ${email} đã tồn tại trên hệ thống. Vui lòng sử dụng email khác.`)
     }
 
     //fetch user role
-    const userRole = await this.roleModel.findOne({ name: USER_ROLE });
+    const role = await this.roleModel.findOne({ name: "NORMAL_USER" });
 
     const hashPassword = this.getHashPassword(password);
     let newRegister = await this.userModel.create({
@@ -76,7 +79,8 @@ export class UsersService {
       age,
       gender,
       address,
-      role: userRole?._id
+      role,
+      isActived: false
     })
     return newRegister;
   }
@@ -116,19 +120,19 @@ export class UsersService {
 
   async findOne(id: string) {
     if (!mongoose.Types.ObjectId.isValid(id))
-      return `not found user`;
+      return null;
 
     return await this.userModel.findOne({
       _id: id
     })
-      .select("-password")
+      .select("+password")
       .populate({ path: "role", select: { name: 1, _id: 1 } })
 
 
     //exclude >< include
   }
 
-  findOneByUsername(username: string) {
+  async findOneByUsername(username: string) {
     return this.userModel.findOne({
       email: username
     }).populate({
@@ -138,22 +142,44 @@ export class UsersService {
   }
 
 
+
   isValidPassword(password: string, hash: string) {
     return compareSync(password, hash);
   }
 
   async update(updateUserDto: UpdateUserDto, user: IUser, _id: string) {
+    // Validate MongoID
+    if (!mongoose.Types.ObjectId.isValid(_id)) {
+      throw new BadRequestException('Invalid user ID');
+    }
 
-    const updated = await this.userModel.updateOne(
-      { _id: _id },
-      {
-        ...updateUserDto,
-        updatedBy: {
-          _id: user._id,
-          email: user.email
+    // Check if user exists
+    const existingUser = await this.userModel.findById(_id);
+    if (!existingUser) {
+      throw new BadRequestException('User not found');
+    }
+
+    try {
+      const updated = await this.userModel.findByIdAndUpdate(
+        _id,
+        {
+          ...updateUserDto,
+          updatedBy: {
+            _id: user._id,
+            email: user.email
+          }
+        },
+        {
+          new: true, // return the updated document
+          runValidators: true // run mongoose validation
         }
-      });
-    return updated;
+      ).select('-password -email -isActived');
+
+      return updated;
+
+    } catch (error) {
+      throw new BadRequestException(`Error updating user: ${error.message}`);
+    }
   }
 
   async remove(id: string, user: IUser) {
@@ -186,12 +212,26 @@ export class UsersService {
     )
   }
 
+  updateUserPassword = async (_id: string, hashedPassword: string) => {
+    return await this.userModel.updateOne(
+      { _id },
+      { password: hashedPassword }
+    )
+  }
+
   findUserByToken = async (refreshToken: string) => {
     return await this.userModel.findOne({ refreshToken })
       .populate({
         path: "role",
         select: { name: 1 }
       });
+  }
+
+  activeAccount = async (email: string, status: boolean) => {
+    return await this.userModel.updateOne(
+      { email },
+      { isActived: status }
+    )
   }
 
 }

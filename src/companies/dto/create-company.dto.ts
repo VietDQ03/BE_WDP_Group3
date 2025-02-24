@@ -1,5 +1,5 @@
 import { Prop } from '@nestjs/mongoose';
-import { IsNotEmpty } from 'class-validator';
+import { IsNotEmpty, IsOptional } from 'class-validator';
 
 export class CreateCompanyDto {
   @IsNotEmpty()
@@ -10,5 +10,7 @@ export class CreateCompanyDto {
   description: string;
   @IsNotEmpty({ message: 'Logo không được để trống', })
   logo: string;
+  @IsOptional()
+  isActive: boolean
 
 }

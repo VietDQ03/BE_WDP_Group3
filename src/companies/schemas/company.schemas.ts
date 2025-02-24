@@ -36,6 +36,9 @@ export class Company {
     }
 
     @Prop()
+    isActive: boolean;
+
+    @Prop()
     createdAt: Date;
 
     @Prop()

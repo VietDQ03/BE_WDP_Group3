@@ -9,19 +9,28 @@ import { JwtStrategy } from './passport/jwt.strategy';
 import { CompaniesModule } from 'src/companies/companies.module';
 import { AuthController } from './auth.controller';
 import { RolesModule } from 'src/roles/roles.module';
+import { GoogleStrategy } from './passport/google.strategy';
+import google_oauthConfig from './configs/google_oauth.config';
+import { VerificationModule } from 'src/verification/verification.module';
+import { MailModule } from 'src/mail/mail.module';
 
 @Module({
-  providers: [AuthService, LocalStrategy, JwtStrategy],
+  providers: [AuthService, LocalStrategy, JwtStrategy, GoogleStrategy],
   imports: [
     CompaniesModule,
     UsersModule,
     PassportModule,
     RolesModule,
+    VerificationModule,
+    MailModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
+    ConfigModule.forFeature(google_oauthConfig),
     JwtModule.registerAsync({
-      imports: [ConfigModule],
+      imports: [
+        ConfigModule
+      ],
       useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET'), // Thay secretOrPrivateKey bằng secret
+        secret: configService.get<string>('JWT_SECRET'),
         signOptions: {
           expiresIn: configService.get<string>('JWT_EXPIRED'),
         },
@@ -32,4 +41,4 @@ import { RolesModule } from 'src/roles/roles.module';
   controllers: [AuthController],
   exports: [AuthService],
 })
-export class AuthModule {}
+export class AuthModule { }

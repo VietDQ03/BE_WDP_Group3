@@ -3,7 +3,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
-import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { JwtAuthGuard } from './auth/guards/jwt-auth/jwt-auth.guard';
 import { TransformInterceptor } from './core/transform.interceptor';
 import cookieParser from 'cookie-parser';
 import { join } from 'path';
@@ -60,6 +60,8 @@ async function bootstrap() {
     },
   });
 
-  await app.listen(configService.get<string>('PORT'));
+  const PORT = configService.get<string>('PORT')
+  await app.listen(PORT);
+  console.log("http://localhost:" + PORT + "/swagger#/")
 }
 bootstrap();

@@ -1,66 +1,28 @@
-import { Controller, Get } from '@nestjs/common';
+import { Body, Controller, Get, Post } from '@nestjs/common';
 import { MailService } from './mail.service';
-import { Public, ResponseMessages } from 'src/decorator/customize';
-import { MailerService } from '@nestjs-modules/mailer';
-import { SoftDeleteModel } from 'soft-delete-plugin-mongoose';
-import { Subscriber, SubscriberDocument } from 'src/subscribers/schemas/subscriber.schema';
-import { Job, JobDocument} from 'src/jobs/shemas/job.schema';
-import { InjectModel } from '@nestjs/mongoose';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Public, ResponseMessages, UserS } from 'src/decorator/customize';
+import { Cron } from '@nestjs/schedule';
+import { SendOtp } from './dto/send-Mail.dto';
+import { IUser } from 'src/users/users.interface';
 
 
 @Controller('mail')
 export class MailController {
-  constructor(private readonly mailService: MailService,
-    private mailerService: MailerService,
+  constructor(private readonly mailService: MailService) { }
 
-    @InjectModel(Subscriber.name)
-    private subscriberModel: SoftDeleteModel<SubscriberDocument>,
-
-    @InjectModel(Job.name)
-    private jobModel: SoftDeleteModel<JobDocument>,
-
-
-  ) {
-  }
-
-
-  @Get()
+  @Get('SendJob')
   @Public()
   @ResponseMessages("Test email")
   @Cron("0 10 0 * * 0")
-  async handleTestEmail() {
-  
+  async sendJobMail() {
+    this.mailService.HandleJobMail()
+  }
 
-    const subscribers = await this.subscriberModel.find({});
-    for (const subs of subscribers) {
-      const subsSkills = subs.skills;
-      const jobWithMatchingSkills = await this.jobModel.find({ skills: { $in: subsSkills } });
-      if (jobWithMatchingSkills?.length) {
-        const jobs = jobWithMatchingSkills.map(item => {
-          return {
-            name: item.name,
-            company: item.company.name,
-            salary: `${item.salary}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + " đ",
-            skills: item.skills
-          }
-        })
-
-        await this.mailerService.sendMail({
-          to: "vietqdhe172084@fpt.edu.vn",
-          from: '"Support Team" <support@example.com>', // override default from
-          subject: 'Welcome to Nice App! Confirm your Email',
-          template: "new-job",
-          context: {
-            receiver: subs.name,
-            jobs: jobs
-          }
-        });
-      }
-    }
-
-
-
+  @Post('sendOTP')
+  @Public()
+  @ResponseMessages("Send OTP")
+  async sendOTP(@Body() sendOtp: SendOtp) {
+    return this.mailService.sendOtp(sendOtp.email)
   }
 
 }

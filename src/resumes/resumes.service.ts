@@ -7,20 +7,32 @@ import { Resume, ResumeDocument } from './schemas/resume.schema';
 import { IUser } from 'src/users/users.interface';
 import aqp from 'api-query-params';
 import mongoose from 'mongoose';
+import { MailService } from 'src/mail/mail.service';
+import { JobsService } from 'src/jobs/jobs.service';
+import { User, UserDocument } from 'src/users/schemas/user.schema';
+import { Job, JobDocument } from 'src/jobs/shemas/job.schema';
 
 @Injectable()
 export class ResumesService {
   constructor(
     @InjectModel(Resume.name)
     private resumeModel: SoftDeleteModel<ResumeDocument>,
-  ) {}
+    @InjectModel(User.name)
+    private userModel: SoftDeleteModel<UserDocument>,
+    @InjectModel(Job.name)
+    private jobModel: SoftDeleteModel<JobDocument>,
+    private jobService: JobsService,
+    private mailService: MailService
+  ) { }
   async create(createUserCvDto: CreateUserCvDto, user: IUser) {
-    const { url, companyId, jobId } = createUserCvDto;
+    const { url, jobId, description } = createUserCvDto;
     const { email, _id } = user;
+    const job = await this.jobService.findOne(jobId.toString())
 
     const newCV = await this.resumeModel.create({
       url,
-      companyId,
+      companyId: job.company._id,
+      description,
       email,
       jobId,
       userId: _id,
@@ -37,6 +49,7 @@ export class ResumesService {
         },
       ],
     });
+    this.mailService.sendRusumeMail(user._id, createUserCvDto.jobId.toString())
 
     return {
       _id: newCV?._id,
@@ -49,14 +62,53 @@ export class ResumesService {
     delete filter.current;
     delete filter.pageSize;
 
+    const searchConditions: any[] = [];
+    const searchType = filter.searchType || 'or'; // mặc định là OR nếu không specified
+    delete filter.searchType;
+
+    // Thêm điều kiện tìm kiếm cho email và status và company
+    if (filter.email) {
+      searchConditions.push({
+        email: { $regex: filter.email, $options: 'i' }
+      });
+    }
+
+    if (filter.status) {
+      searchConditions.push({
+        status: filter.status
+      });
+    }
+
+    if (filter.company) {
+      searchConditions.push({
+        company: { $regex: filter.company, $options: 'i' }
+      });
+    }
+
+    // Xóa các trường đã xử lý
+    delete filter.email;
+    delete filter.status;
+    delete filter.company;
+
+    // Tạo finalFilter
+    let finalFilter: any = { ...filter };
+
+    // Kiểm tra nếu có điều kiện tìm kiếm
+    if (searchConditions.length > 0) {
+      finalFilter = {
+        ...filter,
+        [searchType === 'and' ? '$and' : '$or']: searchConditions
+      };
+    }
+
     let offset = (+currentPage - 1) * +limit;
     let defaultLimit = +limit ? +limit : 10;
 
-    const totalItems = (await this.resumeModel.find(filter)).length;
+    const totalItems = (await this.resumeModel.find(finalFilter)).length;
     const totalPages = Math.ceil(totalItems / defaultLimit);
 
     const result = await this.resumeModel
-      .find(filter)
+      .find(finalFilter)
       .skip(offset)
       .limit(defaultLimit)
       .sort(sort as any)
@@ -65,12 +117,12 @@ export class ResumesService {
 
     return {
       meta: {
-        current: currentPage, //trang hiện tại
-        pageSize: limit, //số lượng bản ghi đã lấy
-        pages: totalPages, //tổng số trang với điều kiện query
-        total: totalItems, // tổng số phần tử (số bản ghi)
+        current: currentPage,
+        pageSize: limit,
+        pages: totalPages,
+        total: totalItems,
       },
-      result, //kết quả query
+      result,
     };
   }
 
@@ -141,5 +193,119 @@ export class ResumesService {
       _id: id
     })
   }
+  async findByCompany(companyId: string, currentPage: number, limit: number, qs: string) {
+    try {
+      const { filter, sort, population } = aqp(qs);
+      delete filter.current;
+      delete filter.pageSize;
 
+      const baseConditions = {
+        companyId: companyId,
+        isDeleted: false
+      };
+
+      const searchType = filter.searchType || 'or';
+      delete filter.searchType;
+
+      let searchConditions: any[] = [];
+
+      if (filter.email) {
+        searchConditions.push({
+          email: { $regex: filter.email, $options: 'i' }
+        });
+      }
+
+      if (filter.status) {
+        searchConditions.push({
+          status: filter.status.toUpperCase()
+        });
+      }
+
+      delete filter.email;
+      delete filter.status;
+
+      let finalFilter: any = {
+        ...baseConditions,
+        ...filter
+      };
+
+      if (searchConditions.length > 0) {
+        if (searchType === 'or') {
+          finalFilter = {
+            $and: [
+              baseConditions,
+              { $or: searchConditions }
+            ]
+          };
+        } else {
+          finalFilter = {
+            $and: [
+              baseConditions,
+              ...searchConditions
+            ]
+          };
+        }
+      }
+
+      const offset = (+currentPage - 1) * +limit;
+      const defaultLimit = +limit ? +limit : 10;
+
+      const [totalItems, resumes] = await Promise.all([
+        this.resumeModel.countDocuments(finalFilter),
+        this.resumeModel
+          .find(finalFilter)
+          .skip(offset)
+          .limit(defaultLimit)
+          .sort(sort as any)
+          .lean()
+      ]);
+
+      const userIds = [...new Set(resumes.map(resume => resume.userId))];
+      const jobIds = [...new Set(resumes.map(resume => resume.jobId))];
+
+      const [users, jobs] = await Promise.all([
+        this.userModel.find({
+          _id: { $in: userIds },
+          isDeleted: false
+        })
+          .select('_id name')
+          .lean(),
+
+        this.jobModel.find({
+          _id: { $in: jobIds },
+          isDeleted: false
+        })
+          .select('_id name')
+          .lean()
+      ]);
+
+      const userMap = new Map(users.map(user => [user._id.toString(), user]));
+      const jobMap = new Map(jobs.map(job => [job._id.toString(), job]));
+
+      const transformedResult = resumes.map(resume => {
+        const user = userMap.get(resume.userId.toString());
+        const job = jobMap.get(resume.jobId.toString());
+
+        return {
+          ...resume,
+          userName: user?.name,
+          jobName: job?.name
+        };
+      });
+
+      return {
+        meta: {
+          current: +currentPage,
+          pageSize: +limit,
+          pages: Math.ceil(totalItems / defaultLimit),
+          total: totalItems
+        },
+        result: transformedResult
+      };
+
+    } catch (error) {
+      console.error('Error in findByCompany:', error);
+      throw error;
+    }
+  }
 }

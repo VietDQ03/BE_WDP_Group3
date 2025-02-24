@@ -7,7 +7,10 @@ import { join } from 'path';
 import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handlebars.adapter';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Subscriber, SubscriberSchema } from 'src/subscribers/schemas/subscriber.schema';
-import { Job, JobSchema} from 'src/jobs/shemas/job.schema';
+import { Job, JobSchema } from 'src/jobs/shemas/job.schema';
+import { UsersModule } from 'src/users/users.module';
+import { VerificationModule } from 'src/verification/verification.module';
+import { JobsModule } from 'src/jobs/jobs.module';
 @Module({
   imports: [
     MailerModule.forRootAsync({
@@ -37,10 +40,14 @@ import { Job, JobSchema} from 'src/jobs/shemas/job.schema';
     MongooseModule.forFeature([
       { name: Subscriber.name, schema: SubscriberSchema },
       { name: Job.name, schema: JobSchema },
-    ])
+    ]),
+    UsersModule,
+    VerificationModule,
+    JobsModule,
   ],
   controllers: [MailController],
-  providers: [MailService]
+  providers: [MailService],
+  exports: [MailService]
 })
 export class MailModule { }
 
