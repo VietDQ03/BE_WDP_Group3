@@ -10,6 +10,7 @@ export interface PaymentOrder {
   orderType: string;
   orderInfo: string;
   bankCode?: string;
+  // userId: string;
 }
 
 export interface VNPayResponse {
