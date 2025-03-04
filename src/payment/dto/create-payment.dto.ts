@@ -1,22 +1,24 @@
-import { IsNotEmpty, IsNumber, IsString, Min } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsString, IsOptional, Min } from 'class-validator';
 
 export class CreatePaymentDto {
-  @IsNotEmpty()
   @IsNumber()
+  @IsNotEmpty()
   @Min(1000)
   amount: number;
 
-  @IsNotEmpty()
   @IsString()
-  orderInfo: string;
-
   @IsNotEmpty()
-  @IsString()
   orderType: string;
 
   @IsString()
-  bankCode?: string;
+  @IsNotEmpty()
+  orderInfo: string;
 
   @IsString()
+  @IsOptional()
   language?: string;
+
+  @IsString()
+  @IsOptional()
+  bankCode?: string;
 }

@@ -1,8 +1,8 @@
-// payment/schemas/payment.schema.ts
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { Document } from 'mongoose';
 
-export type PaymentDocument = HydratedDocument<Payment> ;
+export type PaymentDocument = Payment & Document;
+
 @Schema({ timestamps: true })
 export class Payment {
   @Prop({ required: true })
@@ -18,19 +18,19 @@ export class Payment {
   status: string;
 
   @Prop()
-  paymentTime: Date;
+  bankCode?: string;
 
   @Prop()
-  bankCode: string;
+  bankTranNo?: string;
 
   @Prop()
-  bankTranNo: string;
+  transactionNo?: string;
 
   @Prop()
-  transactionNo: string;
+  responseCode?: string;
 
   @Prop()
-  responseCode: string;
+  paymentTime?: Date;
 }
 
 export const PaymentSchema = SchemaFactory.createForClass(Payment);
