@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { MailService } from './mail.service';
 import { MailController } from './mail.controller';
 import { ConfigService } from '@nestjs/config';
@@ -11,6 +11,9 @@ import { Job, JobSchema } from 'src/jobs/shemas/job.schema';
 import { UsersModule } from 'src/users/users.module';
 import { VerificationModule } from 'src/verification/verification.module';
 import { JobsModule } from 'src/jobs/jobs.module';
+import { ResumesModule } from 'src/resumes/resumes.module';
+import { CompaniesModule } from 'src/companies/companies.module';
+import { Resume, ResumeSchema } from 'src/resumes/schemas/resume.schema';
 @Module({
   imports: [
     MailerModule.forRootAsync({
@@ -40,10 +43,14 @@ import { JobsModule } from 'src/jobs/jobs.module';
     MongooseModule.forFeature([
       { name: Subscriber.name, schema: SubscriberSchema },
       { name: Job.name, schema: JobSchema },
+      { name: Resume.name, schema: ResumeSchema },
     ]),
     UsersModule,
     VerificationModule,
     JobsModule,
+    forwardRef(() => ResumesModule),
+    CompaniesModule
+
   ],
   controllers: [MailController],
   providers: [MailService],

@@ -13,8 +13,19 @@ import {
 import mongoose from 'mongoose';
 
 
-export class SendOtp {
+export class SendOtpDto {
   @IsNotEmpty({ message: 'Email không được để trống' })
   email: string;
 }
 
+
+export class SendResultDto {
+  @IsNotEmpty({ message: 'UserId không được để trống' })
+  userId: string;
+
+  @IsNotEmpty({ message: 'ResumeId không được để trống' })
+  resumeId: string;
+
+  @IsNotEmpty({ message: 'Status không được để trống' })
+  status: string;
+}
