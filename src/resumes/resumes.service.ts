@@ -24,38 +24,7 @@ export class ResumesService {
     private jobService: JobsService,
     private mailService: MailService
   ) { }
-  async create(createUserCvDto: CreateUserCvDto, user: IUser) {
-    const { url, jobId, description } = createUserCvDto;
-    const { email, _id } = user;
-    const job = await this.jobService.findOne(jobId.toString())
-
-    const newCV = await this.resumeModel.create({
-      url,
-      companyId: job.company._id,
-      description,
-      email,
-      jobId,
-      userId: _id,
-      status: 'PENDING',
-      createdBy: { _id, email },
-      history: [
-        {
-          status: 'PENDING',
-          updatedAt: new Date(),
-          updatedBy: {
-            _id: user._id,
-            email: user.email,
-          },
-        },
-      ],
-    });
-    this.mailService.sendRusumeMail(user._id, createUserCvDto.jobId.toString())
-
-    return {
-      _id: newCV?._id,
-      createdAt: newCV?.createdAt,
-    };
-  }
+  
 
   async findAll(currentPage: number, limit: number, qs: string) {
     const { filter, sort, population } = aqp(qs);
