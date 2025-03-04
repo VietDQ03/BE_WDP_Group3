@@ -1,11 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { createHmac } from 'crypto';
 import { format } from 'date-fns';
 import { Payment, PaymentDocument } from './schemas/payment.schema';
-import { PaymentOrder, VNPayConfig, VNPayResponse } from './interfaces/vnpay.interface';
+import {
+  PaymentOrder,
+  VNPayConfig,
+  VNPayResponse,
+} from './interfaces/vnpay.interface';
 @Injectable()
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
@@ -27,19 +31,19 @@ export class PaymentService {
     const sorted = {};
     const str = [];
     let key;
-    
+
     for (key in obj) {
       if (obj.hasOwnProperty(key)) {
         str.push(encodeURIComponent(key));
       }
     }
-    
+
     str.sort();
-    
+
     for (key = 0; key < str.length; key++) {
-      sorted[str[key]] = encodeURIComponent(obj[str[key]]).replace(/%20/g, "+");
+      sorted[str[key]] = encodeURIComponent(obj[str[key]]).replace(/%20/g, '+');
     }
-    
+
     return sorted;
   }
 
@@ -47,11 +51,11 @@ export class PaymentService {
     if (!payload.amount || payload.amount < 1000) {
       throw new Error('Amount must be at least 1000 VND');
     }
-    
+
     if (!payload.orderInfo) {
       throw new Error('Order info is required');
     }
-    
+
     if (!payload.orderType) {
       throw new Error('Order type is required');
     }
@@ -101,7 +105,7 @@ export class PaymentService {
         vnp_Amount: String(payload.amount * 100),
         vnp_ReturnUrl: this.vnpayConfig.returnUrl,
         vnp_IpAddr: '127.0.0.1',
-        vnp_CreateDate: createDate
+        vnp_CreateDate: createDate,
       };
 
       if (payload.bankCode) {
@@ -109,7 +113,7 @@ export class PaymentService {
       }
 
       const sortedParams = this.sortObject(vnpParams);
-      
+
       const signData = Object.entries(sortedParams)
         .map(([key, value]) => `${key}=${value}`)
         .join('&');
@@ -120,7 +124,7 @@ export class PaymentService {
 
       const finalParams = {
         ...vnpParams,
-        vnp_SecureHash: secured
+        vnp_SecureHash: secured,
       };
 
       const queryString = Object.entries(finalParams)
@@ -134,7 +138,7 @@ export class PaymentService {
         sortedParams,
         signData,
         secureHash: secured,
-        paymentUrl
+        paymentUrl,
       });
 
       await this.createPaymentRecord({
@@ -142,17 +146,20 @@ export class PaymentService {
         amount: payload.amount,
         orderInfo: vnpParams.vnp_OrderInfo,
         status: 'pending',
+        // userId: new Types.ObjectId(userId),
+        // payerId: new Types.ObjectId(userId),
       });
 
       return paymentUrl;
-
     } catch (error) {
       this.logger.error(`Error creating payment URL: ${error.message}`);
       throw error;
     }
   }
 
-  private async createPaymentRecord(paymentData: Partial<Payment>): Promise<Payment> {
+  private async createPaymentRecord(
+    paymentData: Partial<Payment>,
+  ): Promise<Payment> {
     try {
       const payment = new this.paymentModel(paymentData);
       return await payment.save();
@@ -169,18 +176,18 @@ export class PaymentService {
       }
 
       const paymentUrl = await this.createPaymentUrl(paymentOrder);
-      
+
       return {
         status: 'success',
         data: {
-          paymentUrl
-        }
+          paymentUrl,
+        },
       };
     } catch (error) {
       this.logger.error(`Error in createPayment: ${error.message}`);
       return {
         status: 'error',
-        message: error.message
+        message: error.message,
       };
     }
   }
@@ -188,7 +195,7 @@ export class PaymentService {
   async handlePaymentReturn(vnpayResponse: VNPayResponse) {
     try {
       const secureHash = vnpayResponse.vnp_SecureHash;
-      
+
       const responseParams = { ...vnpayResponse };
       delete responseParams.vnp_SecureHash;
       delete responseParams.vnp_SecureHashType;
@@ -199,21 +206,21 @@ export class PaymentService {
         .map(([key, value]) => `${key}=${value}`)
         .join('&');
 
-        const hmac = createHmac('sha512', this.vnpayConfig.hashSecret);
-        const checkSum = hmac.update(signData, 'utf-8').digest('hex');
+      const hmac = createHmac('sha512', this.vnpayConfig.hashSecret);
+      const checkSum = hmac.update(signData, 'utf-8').digest('hex');
 
       this.logger.debug('Payment return details:', {
         originalResponse: vnpayResponse,
         responseParams,
         signData,
         checkSum,
-        secureHash
+        secureHash,
       });
 
       if (secureHash !== checkSum) {
         return {
           status: 'error',
-          message: 'Invalid signature'
+          message: 'Invalid signature',
         };
       }
 
@@ -230,7 +237,7 @@ export class PaymentService {
           responseCode,
           paymentTime: new Date(),
         },
-        { new: true }
+        { new: true },
       );
 
       return {
@@ -238,10 +245,9 @@ export class PaymentService {
         data: {
           orderId,
           responseCode,
-          message: this.getResponseMessage(responseCode)
-        }
+          message: this.getResponseMessage(responseCode),
+        },
       };
-
     } catch (error) {
       this.logger.error(`Error handling payment return: ${error.message}`);
       throw error;
@@ -254,19 +260,19 @@ export class PaymentService {
       if (!payment) {
         return {
           status: 'error',
-          message: 'Payment not found'
+          message: 'Payment not found',
         };
       }
 
       return {
         status: 'success',
-        data: payment
+        data: payment,
       };
     } catch (error) {
       this.logger.error(`Error getting payment status: ${error.message}`);
       return {
         status: 'error',
-        message: error.message
+        message: error.message,
       };
     }
   }
@@ -278,20 +284,20 @@ export class PaymentService {
           $group: {
             _id: '$status',
             count: { $sum: 1 },
-            totalAmount: { $sum: '$amount' }
-          }
-        }
+            totalAmount: { $sum: '$amount' },
+          },
+        },
       ]);
 
       return {
         status: 'success',
-        data: stats
+        data: stats,
       };
     } catch (error) {
       this.logger.error(`Error getting payment statistics: ${error.message}`);
       return {
         status: 'error',
-        message: error.message
+        message: error.message,
       };
     }
   }
@@ -301,25 +307,25 @@ export class PaymentService {
       const payment = await this.paymentModel.findOneAndUpdate(
         { orderId, status: 'pending' },
         { status: 'cancelled' },
-        { new: true }
+        { new: true },
       );
 
       if (!payment) {
         return {
           status: 'error',
-          message: 'Payment not found or cannot be cancelled'
+          message: 'Payment not found or cannot be cancelled',
         };
       }
 
       return {
         status: 'success',
-        data: payment
+        data: payment,
       };
     } catch (error) {
       this.logger.error(`Error cancelling payment: ${error.message}`);
       return {
         status: 'error',
-        message: error.message
+        message: error.message,
       };
     }
   }
