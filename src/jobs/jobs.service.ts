@@ -34,6 +34,18 @@ export class JobsService {
     } = createJobDto;
 
     try {
+      // Validate date range
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const diffTime = Math.abs(end.getTime() - start.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays > 7) {
+        throw new BadRequestException(
+          'Bạn chỉ được đăng tuyển trong vòng 1 tuần kể từ ngày bắt đầu',
+        );
+      }
+
       // Check premium của user
       const currentUser = await this.userModel.findById(user._id);
       if (currentUser.premium === 0) {
@@ -173,6 +185,23 @@ export class JobsService {
   }
 
   async update(_id: string, updateJobDto: UpdateJobDto, user: IUser) {
+    // If dates are being updated, validate them
+    if (updateJobDto.startDate || updateJobDto.endDate) {
+      // Get current job data to handle partial updates
+      const currentJob = await this.jobModel.findById(_id);
+      const start = new Date(updateJobDto.startDate || currentJob.startDate);
+      const end = new Date(updateJobDto.endDate || currentJob.endDate);
+
+      const diffTime = Math.abs(end.getTime() - start.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays > 7) {
+        throw new BadRequestException(
+          'Bạn chỉ được đăng tuyển trong vòng 1 tuần kể từ ngày bắt đầu',
+        );
+      }
+    }
+
     const updated = await this.jobModel.updateOne(
       { _id },
       {
