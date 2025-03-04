@@ -17,4 +17,6 @@ export interface IUser {
     module: string;
   }[];
   premium: number;
+  isDeleted: boolean;
+  isActived: boolean;
 }

@@ -1,14 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
-  IsBoolean,
   IsEmail,
   IsMongoId,
   IsNotEmpty,
-  IsNotEmptyObject,
-  IsObject,
   IsOptional,
   IsString,
+  Matches,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -33,26 +31,33 @@ export class CreateUserDto {
   email: string;
 
   @IsNotEmpty({ message: 'Password không được để trống' })
+  @Matches(
+    /^(?=.*[A-Z])(?=.*[!@#$%^&*(),.?":{}|<>])[a-zA-Z0-9!@#$%^&*(),.?":{}|<>]{1,}$/,
+    {
+      message: 'Password phải chứa ít nhất 1 chữ viết hoa và 1 ký tự đặc biệt',
+    },
+  )
   password: string;
-
-  //   @IsNotEmpty({ message: 'Age không được để trống' })
+  @IsOptional()
+  @Min(0, { message: 'Tuổi không được là số âm' })
   age: number;
 
-  //   @IsNotEmpty({ message: 'Gender không được để trống' })
-  gender: boolean;
+  @IsOptional()
+  gender: string;
 
-  //   @IsNotEmpty({ message: 'Address không được để trống' })
+  @IsOptional()
   address: string;
-
+  @IsOptional()
   avatarUrl: string;
 
+  @IsOptional()
   isActived: boolean;
-
 
   @IsOptional()
   @Min(0, { message: 'Premium không được là số âm' })
   premium: number;
-  //   @IsNotEmpty({ message: 'Role không được để trống' })
+
+  // @IsNotEmpty({ message: 'Role không được để trống' })
   // @IsMongoId({ message: 'Role có định dạng là mongo id' })
   // role: mongoose.Schema.Types.ObjectId;
 
@@ -82,7 +87,7 @@ export class RegisterUserDto {
   age: number;
 
   @IsNotEmpty({ message: 'Gender không được để trống' })
-  gender: boolean;
+  gender: string;
 
   @IsNotEmpty({ message: 'Address không được để trống' })
   address: string;
