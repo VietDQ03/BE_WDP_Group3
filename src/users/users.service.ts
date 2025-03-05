@@ -91,34 +91,81 @@ export class UsersService {
 
   async findAll(currentPage: number, limit: number, qs: string) {
     const { filter, sort, population } = aqp(qs);
+    
     delete filter.current;
     delete filter.pageSize;
 
-    let offset = (+currentPage - 1) * +limit;
-    let defaultLimit = +limit ? +limit : 10;
+    const searchConditions: any[] = [];
 
-    const totalItems = (await this.userModel.find(filter)).length;
+    // Search by email
+    if (filter.email) {
+        searchConditions.push({
+            email: { $regex: filter.email, $options: 'i' }
+        });
+    }
+
+    // Search by name
+    if (filter.name) {
+        searchConditions.push({
+            name: { $regex: filter.name, $options: 'i' }
+        });
+    }
+
+    // Search by role (ObjectId)
+    if (filter.role) {
+        searchConditions.push({
+            role: filter.role // Direct match for ObjectId
+        });
+    }
+
+    // Search by isActived
+    if (filter.isActived !== undefined) {
+        searchConditions.push({
+            isActived: filter.isActived
+        });
+    }
+
+    // Remove processed fields
+    delete filter.email;
+    delete filter.name;
+    delete filter.role;
+    delete filter.isActived;
+
+    // Create final filter
+    let finalFilter: any = { ...filter };
+
+    if (searchConditions.length > 0) {
+        finalFilter = {
+            ...filter,
+            $and: searchConditions
+        };
+    }
+
+    const offset = (+currentPage - 1) * (+limit);
+    const defaultLimit = +limit ? +limit : 10;
+
+    const totalItems = await this.userModel.countDocuments(finalFilter);
     const totalPages = Math.ceil(totalItems / defaultLimit);
 
     const result = await this.userModel
-      .find(filter)
-      .skip(offset)
-      .limit(defaultLimit)
-      .sort(sort as any)
-      .select('-password')
-      .populate(population)
-      .exec();
+        .find(finalFilter)
+        .skip(offset)
+        .limit(defaultLimit)
+        .sort(sort as any)
+        .select('-password')
+        .populate(population)
+        .exec();
 
     return {
-      meta: {
-        current: currentPage, //trang hiện tại
-        pageSize: limit, //số lượng bản ghi đã lấy
-        pages: totalPages, //tổng số trang với điều kiện query
-        total: totalItems, // tổng số phần tử (số bản ghi)
-      },
-      result, //kết quả query
+        meta: {
+            current: currentPage,
+            pageSize: limit,
+            pages: totalPages,
+            total: totalItems
+        },
+        result
     };
-  }
+}
 
   async findOne(id: string) {
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
