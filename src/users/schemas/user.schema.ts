@@ -5,7 +5,16 @@ import { Role } from 'src/roles/schemas/role.schema';
 
 export type UserDocument = HydratedDocument<User>;
 
-@Schema({ timestamps: true })
+@Schema({
+    timestamps: true,
+    toJSON: {
+      virtuals: true,
+      transform: function(doc, ret) {
+        delete ret.password;
+        return ret;
+      }
+    }
+})
 export class User {
     @Prop()
     name: string;
@@ -78,3 +87,41 @@ export class User {
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
+UserSchema.set('discriminatorKey', 'kind');
+UserSchema.set('collection', 'users');
+
+// Xóa tất cả các middleware hiện có nếu có
+UserSchema.clearIndexes();
+
+// Override lại method find
+const originalFind = UserSchema.methods.find;
+UserSchema.methods.find = function(...args) {
+  return originalFind.apply(this, args).where('isDeleted').exists(true);
+};
+// Thêm middleware ở đây, sau khi tạo schema
+UserSchema.pre('find', function(next) {
+    // Bỏ qua điều kiện isDeleted mặc định
+    const query = this.getQuery();
+    if (!query.hasOwnProperty('isDeleted')) {
+        this.setQuery({ ...query, $or: [{ isDeleted: true }, { isDeleted: false }, { isDeleted: { $exists: false } }] });
+    }
+    next();
+});
+
+UserSchema.pre('countDocuments', function(next) {
+    // Áp dụng tương tự cho countDocuments
+    const query = this.getQuery();
+    if (!query.hasOwnProperty('isDeleted')) {
+        this.setQuery({ ...query, $or: [{ isDeleted: true }, { isDeleted: false }, { isDeleted: { $exists: false } }] });
+    }
+    next();
+});
+
+// Thêm middleware cho findOne nếu cần
+UserSchema.pre('findOne', function(next) {
+    const query = this.getQuery();
+    if (!query.hasOwnProperty('isDeleted')) {
+        this.setQuery({ ...query, $or: [{ isDeleted: true }, { isDeleted: false }, { isDeleted: { $exists: false } }] });
+    }
+    next();
+});

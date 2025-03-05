@@ -91,82 +91,70 @@ export class UsersService {
 
   async findAll(currentPage: number, limit: number, qs: string) {
     const { filter, sort, population } = aqp(qs);
-    
-    delete filter.current;
-    delete filter.pageSize;
+    const offset = (currentPage - 1) * limit;
+    const defaultLimit = limit || 10;
 
-    const searchConditions: any[] = [];
+    try {
+        // Sử dụng aggregation để bỏ qua middleware
+        const [result] = await this.userModel.aggregate([
+            // Stage 1: Match với điều kiện search
+            {
+                $match: {
+                    ...(filter.email && { email: { $regex: filter.email, $options: 'i' } }),
+                    ...(filter.name && { name: { $regex: filter.name, $options: 'i' } }),
+                    ...(filter.role && { role: new mongoose.Types.ObjectId(filter.role) }),
+                    ...(filter.isActived !== undefined && { isActived: filter.isActived })
+                }
+            },
+            
+            // Stage 2: Facet để lấy cả total và data
+            {
+                $facet: {
+                    metadata: [{ $count: "total" }],
+                    data: [
+                        { $skip: offset },
+                        { $limit: defaultLimit },
+                        // Populate role
+                        {
+                            $lookup: {
+                                from: 'roles',
+                                localField: 'role',
+                                foreignField: '_id',
+                                as: 'roleInfo'
+                            }
+                        },
+                        { $unwind: { path: '$roleInfo', preserveNullAndEmptyArrays: true } },
+                        // Remove password
+                        {
+                            $project: {
+                                password: 0
+                            }
+                        }
+                    ]
+                }
+            }
+        ]).exec();
 
-    // Search by email
-    if (filter.email) {
-        searchConditions.push({
-            email: { $regex: filter.email, $options: 'i' }
-        });
-    }
+        const totalItems = result.metadata[0]?.total || 0;
+        const totalPages = Math.ceil(totalItems / defaultLimit);
 
-    // Search by name
-    if (filter.name) {
-        searchConditions.push({
-            name: { $regex: filter.name, $options: 'i' }
-        });
-    }
+        console.log('Total found:', totalItems);
+        console.log('Data length:', result.data.length);
 
-    // Search by role (ObjectId)
-    if (filter.role) {
-        searchConditions.push({
-            role: filter.role // Direct match for ObjectId
-        });
-    }
-
-    // Search by isActived
-    if (filter.isActived !== undefined) {
-        searchConditions.push({
-            isActived: filter.isActived
-        });
-    }
-
-    // Remove processed fields
-    delete filter.email;
-    delete filter.name;
-    delete filter.role;
-    delete filter.isActived;
-
-    // Create final filter
-    let finalFilter: any = { ...filter };
-
-    if (searchConditions.length > 0) {
-        finalFilter = {
-            ...filter,
-            $and: searchConditions
+        return {
+            meta: {
+                current: currentPage,
+                pageSize: limit,
+                pages: totalPages,
+                total: totalItems
+            },
+            result: result.data
         };
+    } catch (error) {
+        console.error('Error in findAll:', error);
+        throw error;
     }
-
-    const offset = (+currentPage - 1) * (+limit);
-    const defaultLimit = +limit ? +limit : 10;
-
-    const totalItems = await this.userModel.countDocuments(finalFilter);
-    const totalPages = Math.ceil(totalItems / defaultLimit);
-
-    const result = await this.userModel
-        .find(finalFilter)
-        .skip(offset)
-        .limit(defaultLimit)
-        .sort(sort as any)
-        .select('-password')
-        .populate(population)
-        .exec();
-
-    return {
-        meta: {
-            current: currentPage,
-            pageSize: limit,
-            pages: totalPages,
-            total: totalItems
-        },
-        result
-    };
 }
-
   async findOne(id: string) {
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
 
@@ -200,7 +188,6 @@ export class UsersService {
       throw new BadRequestException('Invalid user ID');
     }
 
-
     // Kiểm tra dữ liệu đầu vào
     if (!updateUserDto || Object.keys(updateUserDto).length === 0) {
       throw new BadRequestException('Update data is required');
@@ -223,7 +210,7 @@ export class UsersService {
                 _id: user._id,
                 email: user.email,
               },
-            }
+            },
           },
           {
             new: true,
@@ -232,17 +219,16 @@ export class UsersService {
         )
         .select('-password -email');
 
-
       if (!updated) {
         throw new BadRequestException('Update failed');
       }
 
       return updated;
     } catch (error) {
-      console.error("Update error:", error);
+      console.error('Update error:', error);
       throw new BadRequestException(`Error updating user: ${error.message}`);
     }
-}
+  }
   async remove(id: string, user: IUser) {
     if (!mongoose.Types.ObjectId.isValid(id)) return `not found user`;
 
