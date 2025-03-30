@@ -11,13 +11,13 @@ import mongoose from 'mongoose';
 export class SkillsService {
   constructor(
     @InjectModel(Skill.name)
-    private positionModel: SoftDeleteModel<SkillDocument>
+    private skillModel: SoftDeleteModel<SkillDocument>
   ) { }
   async create(experience: CreateSkillDto) {
 
     const { name } = experience;
 
-    let newRegister = await this.positionModel.create({
+    let newRegister = await this.skillModel.create({
       name
     })
     return newRegister;
@@ -31,11 +31,11 @@ export class SkillsService {
     let offset = (+currentPage - 1) * (+limit);
     let defaultLimit = +limit ? +limit : 10;
 
-    const totalItems = (await this.positionModel.find(filter)).length;
+    const totalItems = (await this.skillModel.find(filter)).length;
     const totalPages = Math.ceil(totalItems / defaultLimit);
 
 
-    const result = await this.positionModel.find(filter)
+    const result = await this.skillModel.find(filter)
       .skip(offset)
       .limit(defaultLimit)
       .sort(sort as any)
@@ -58,7 +58,7 @@ export class SkillsService {
     if (!mongoose.Types.ObjectId.isValid(id))
       return `not found job`;
 
-    return await this.positionModel.findById(id);
+    return await this.skillModel.findById(id);
   }
 
   update(id: number, updateSkillDto: UpdateSkillDto) {

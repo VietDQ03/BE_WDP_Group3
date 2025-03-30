@@ -1,14 +1,12 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { HydratedDocument } from 'mongoose';
 
-export type positionDocument = HydratedDocument<position>;
+export type PositionDocument = HydratedDocument<Position>;
 
 @Schema({ timestamps: true })
-export class position {
+export class Position {
     @Prop()
     name: string;
-    @Prop()
-    category_id: mongoose.Schema.Types.ObjectId;
 }
 
-export const positionSchema = SchemaFactory.createForClass(position);
+export const PositionSchema = SchemaFactory.createForClass(Position);

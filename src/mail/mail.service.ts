@@ -1,7 +1,7 @@
 import { MailerService } from '@nestjs-modules/mailer';
 import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import mongoose from 'mongoose';
+import mongoose, { ObjectId } from 'mongoose';
 import { Subscriber } from 'rxjs';
 import { SoftDeleteModel } from 'soft-delete-plugin-mongoose';
 import { CompaniesService } from 'src/companies/companies.service';
@@ -23,6 +23,7 @@ export class MailService {
     private mailerService: MailerService,
     private userService: UsersService,
     private verificationService: VerificationService,
+    @Inject(forwardRef(() => JobsService))
     private jobService: JobsService,
     @Inject(forwardRef(() => ResumesService))
     private resumeService: ResumesService,
@@ -36,7 +37,7 @@ export class MailService {
 
     @InjectModel(Resume.name)
     private resumeModel: SoftDeleteModel<ResumeDocument>,
-  ) {}
+  ) { }
 
   async HandleJobMail() {
     const subscribers = await this.subscriberModel.find({});
@@ -46,15 +47,18 @@ export class MailService {
         skills: { $in: subsSkills },
       });
       if (jobWithMatchingSkills?.length) {
-        const jobs = jobWithMatchingSkills.map((item) => {
-          return {
-            name: item.name,
-            company: item.company.name,
-            salary:
-              `${item.salary}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' đ',
-            skills: item.skills,
-          };
-        });
+        const jobs = await Promise.all(
+          jobWithMatchingSkills.map(async (item) => {
+            const company = (await this.companiesService.findOne(item.company.toString())) as CompanyDocument;
+            return {
+              name: item.name,
+              company: company.name,
+              salary:
+                `${item.salary}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' đ',
+              skills: item.skills,
+            };
+          }),
+        );
 
         await this.mailerService.sendMail({
           to: 'vietqdhe172084@fpt.edu.vn',
@@ -73,7 +77,6 @@ export class MailService {
     const user = (await this.userService.findOne(
       sendResultDto.userId,
     )) as UserDocument;
-
     const resume = (await this.resumeService.findOne(
       sendResultDto.resumeId,
     )) as ResumeDocument;
@@ -83,14 +86,14 @@ export class MailService {
     const company = (await this.companiesService.findOne(
       resume.companyId.toString(),
     )) as CompanyDocument;
-    let result: boolean;
+    let result: string;
     if (sendResultDto.status === 'APPROVED') {
-      result = true;
+      result = "Chúc mừng bạn đã vượt qua vòng ứng tuyển cho công việc, hẹn gặp bạn trong thời gian sớm nhất";
     } else if (sendResultDto.status === 'REJECTED') {
-      result = false;}
-    // } else {
-    //   throw new Error('Invalid resume status');
-    // }
+      result = "Sau khi xem xét CV của bạn, chúng tôi nhận thấy rằng hiện tại vị trí ứng tuyển này chưa thật sự phù hợp với thông tin mà bạn đã cung cấp. Cảm ơn bạn đã dành thời gian tham gia ứng tuyển.";
+    } else if (sendResultDto.status === 'PASSCV') {
+      result = "Sau khi xem xét CV của bạn, chúng tôi nhận thấy rằng hiện tại vị trí ứng tuyển này thật sự phù hợp với thông tin mà bạn đã cung cấp. Kết quả đánh giá CV của bạn là: Bạn đã vượt qua vòng hồ sơ!!!! Vui lòng đợi chúng tôi sắp xếp lịch phỏng vấn cho bạn."
+    }
     if (user) {
       await this.mailerService.sendMail({
         to: user.email,
@@ -100,7 +103,7 @@ export class MailService {
         context: {
           receiver: user.name,
           Url: 'https://rabotaworks.com',
-          status: result,
+          result: result,
           job: job.name,
           company: company.name,
 
@@ -113,6 +116,8 @@ export class MailService {
   async sendRusumeMail(userId: string, jobId: string) {
     const user = (await this.userService.findOne(userId)) as UserDocument;
     const job = (await this.jobService.findOne(jobId)) as JobDocument;
+    const skillNames = job.skills.map((skill: any) => skill.name).join(', ');
+    const company = (await this.companiesService.findOne((job.company as any)._id.toString()))
     if (user) {
       await this.mailerService.sendMail({
         to: user.email,
@@ -121,10 +126,11 @@ export class MailService {
         template: 'job',
         context: {
           receiver: user.name,
-          companyName: job.company.name,
+          jobName: job.name,
+          companyName: company.name,
           salary: `${job.salary}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' đ',
-          skills: job.skills.join(', '),
-          logoCompany: job.company.logo,
+          skills: skillNames,
+          logoCompany: company.logo,
         },
       });
     } else {
@@ -187,4 +193,66 @@ export class MailService {
       throw new Error('User not found');
     }
   }
+
+  async sendMailToHR(userId: string, companyName: string) {
+    const Url = 'https://localhost:3000';
+    const user = (await this.userService.findOne(userId)) as UserDocument;
+    await this.mailerService.sendMail({
+      to: user.email,
+      from: '"Support Team" <support@example.com>', // override default from
+      subject: 'Xét duyệt ứng viên ',
+      template: 'mail_to_HR',
+      context: {
+        companyName,
+        Url,
+        userName: user.name,
+      },
+    });
+  }
+
+
+  async sendInvitation(userId: string, jobId: string) {
+    const Url = 'http://localhost:3000/job/' + jobId;
+
+    const user = (await this.userService.findOne(userId)) as UserDocument;
+    const job = (await this.jobService.findOne(jobId)) as JobDocument;
+    const company = (await this.companiesService.findOne((job.company as any)._id.toString()))
+    await this.mailerService.sendMail({
+      to: user.email,
+      from: '"Support Team" <support@example.com>', // override default from
+      subject: 'Thư mời ứng tuyển ',
+      template: 'invitation',
+      context: {
+        userName: user.name,
+        jobName: job.name,
+        companyName: company.name,
+        Url: Url,
+      },
+    })
+  }
+
+
+  // async sendNotificationEmail(userIds: ObjectId[], job: JobDocument) {
+  //   for (const userId of userIds) {
+  //     if (!userId || !mongoose.Types.ObjectId.isValid(userId.toString())) {
+  //       console.log(`Invalid user ID: ${userId}`);
+  //       continue;
+  //     }
+  //     const user = (await this.userService.findOne(userId.toString())) as UserDocument;
+  //     const company = (await this.companiesService.findOne(job.company.toString()) as CompanyDocument)
+  //     await this.mailerService.sendMail({
+  //       to: user.email,
+  //       from: '"Support Team" <support@example.com>', // override default from
+  //       subject: 'Xét duyệt ứng viên ',
+  //       template: 'mail_to_HR',
+  //       context: {
+  //         jobName: job.name,
+  //         companyName: company.name,
+  //         userName: user.name,
+  //         salary: job.salary,
+  //         description: job.description,
+  //       },
+  //     })
+  //   }
+  // }
 }

@@ -21,10 +21,10 @@ import { VerificationModule } from './verification/verification.module';
 import { CvModule } from './cv/cv.module';
 import { SkillModule } from './cv/skills/skills.module';
 import { ExperienceModule } from './cv/experience/experience.module';
-import { SpecializationModule } from './cv/positions/position.module';
-import { LocationModule } from './cv/location/location.module';
+import { PositionModule } from './cv/positions/position.module';
 import { CategoriesModule } from './cv/categories/categories.module';
 import { PaymentModule } from './payment/payment.module';
+import { NotificationModule } from './notifications/notification.module';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
@@ -59,10 +59,10 @@ import { PaymentModule } from './payment/payment.module';
     CvModule,
     SkillModule,
     ExperienceModule,
-    SpecializationModule,
-    LocationModule,
+    PositionModule,
     CategoriesModule,
     PaymentModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -5,6 +5,7 @@ import google_oauthConfig from '../configs/google_oauth.config';
 import { ConfigType } from '@nestjs/config';
 import { AuthService } from '../auth.service';
 import { CreateUserDto } from 'src/users/dto/create-user.dto';
+import { HRStatus } from 'src/users/schemas/user.schema';
 
 @Injectable()
 export class GoogleStrategy extends PassportStrategy(Strategy) {
@@ -36,8 +37,9 @@ export class GoogleStrategy extends PassportStrategy(Strategy) {
       gender: null,
       address: null,
       isActived: true,
-      premium: 2 // thêm trường premium mặc định = 2
-    });
+      premium: 2, // thêm trường premium mặc định = 2
+      hr: profile.hr || HRStatus.ACTIVE  // If profile.hr is null/undefined, use ACTIVE as default
+    }); 
     done(null, user)
   }
 }

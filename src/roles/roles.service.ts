@@ -43,31 +43,66 @@ export class RolesService {
     delete filter.current;
     delete filter.pageSize;
 
-    let offset = (+currentPage - 1) * (+limit);
-    let defaultLimit = +limit ? +limit : 10;
+    // Initialize finalFilter
+    let finalFilter: any = {};
 
-    const totalItems = (await this.roleModel.find(filter)).length;
-    const totalPages = Math.ceil(totalItems / defaultLimit);
+    // Handle name search with proper type checking
+    if (filter.name) {
+      if (typeof filter.name === 'string') {
+        finalFilter.name = { $regex: filter.name, $options: 'i' };
+      } else if (typeof filter.name === 'object') {
+        // Handle special MongoDB operators if needed
+        if (filter.name.$regex) {
+          finalFilter.name = {
+            $regex: filter.name.$regex,
+            $options: filter.name.$options || 'i'
+          };
+        }
+      }
+      delete filter.name;
+    }
 
+    // Merge remaining filters
+    finalFilter = {
+      ...finalFilter,
+      ...filter
+    };
 
-    const result = await this.roleModel.find(filter)
-      .skip(offset)
-      .limit(defaultLimit)
-      .sort(sort as any)
-      .populate(population)
-      .select(projection as any)
-      .exec();
+    // Ensure positive numbers for pagination
+    const validCurrentPage = Math.max(1, +currentPage || 1);
+    const validLimit = Math.max(1, +limit || 10);
+    const offset = (validCurrentPage - 1) * validLimit;
 
-    return {
-      meta: {
-        current: currentPage, //trang hiện tại
-        pageSize: limit, //số lượng bản ghi đã lấy
-        pages: totalPages,  //tổng số trang với điều kiện query
-        total: totalItems // tổng số phần tử (số bản ghi)
-      },
-      result //kết quả query
+    try {
+      // Get total count
+      const totalItems = await this.roleModel.countDocuments(finalFilter);
+      const totalPages = Math.ceil(totalItems / validLimit);
+
+      // Get paginated results
+      const result = await this.roleModel
+        .find(finalFilter)
+        .skip(offset)
+        .limit(validLimit)
+        .sort(sort as any)
+        .populate(population)
+        .select(projection as any)
+        .exec();
+
+      return {
+        meta: {
+          current: validCurrentPage,
+          pageSize: validLimit,
+          pages: totalPages,
+          total: totalItems,
+        },
+        result,
+      };
+    } catch (error) {
+      // Handle errors appropriately
+      throw new Error(`Failed to fetch roles: ${error.message}`);
     }
   }
+
 
   async findOne(id: string) {
     if (!mongoose.Types.ObjectId.isValid(id)) {

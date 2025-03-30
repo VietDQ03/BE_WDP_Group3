@@ -22,7 +22,7 @@ import mongoose from 'mongoose';
 @ApiTags('jobs')
 @Controller('jobs')
 export class JobsController {
-  constructor(private readonly jobsService: JobsService) {}
+  constructor(private readonly jobsService: JobsService) { }
 
   @Post()
   @ResponseMessages('Create a new job')
@@ -44,7 +44,7 @@ export class JobsController {
 
       const data = await this.jobsService.findByCompany(
         companyId,
-        Number(current), 
+        Number(current),
         Number(pageSize),
         qs
       );
@@ -70,6 +70,15 @@ export class JobsController {
       }, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
+
+  @Public()
+  @Get('/notification/:id')
+  @ResponseMessages('notification for user')
+  async notiForUser(@Param('id') id: string) {
+    const skills = await this.jobsService.NotificationForUser(id);
+    return skills;
+  }
+
   @Public()
   @Get()
   @ResponseMessages('Fetch jobs with pagination')
@@ -80,12 +89,15 @@ export class JobsController {
   ) {
     return this.jobsService.findAll(+currentPage, +limit, qs);
   }
+
   @Public()
   @Get(':id')
   @ResponseMessages('Fetch a job by id')
   findOne(@Param('id') id: string) {
     return this.jobsService.findOne(id);
   }
+
+
 
   @Patch(':id')
   @ResponseMessages('Update a job')
@@ -102,4 +114,6 @@ export class JobsController {
   remove(@Param('id') id: string, @UserS() user: IUser) {
     return this.jobsService.remove(id, user);
   }
+
+
 }

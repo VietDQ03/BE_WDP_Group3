@@ -2,8 +2,8 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { CreateUserDto, RegisterUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectModel } from '@nestjs/mongoose';
-import { User as UserM, UserDocument } from './schemas/user.schema';
-import mongoose, { Model } from 'mongoose';
+import { User as UserM, UserDocument, HRStatus } from './schemas/user.schema';
+import mongoose, { Model, Types } from 'mongoose';
 import { genSaltSync, hashSync, compareSync } from 'bcryptjs';
 import { SoftDeleteModel } from 'soft-delete-plugin-mongoose';
 import { IUser } from './users.interface';
@@ -20,7 +20,7 @@ export class UsersService {
 
     @InjectModel(Role.name)
     private roleModel: SoftDeleteModel<RoleDocument>,
-  ) {}
+  ) { }
 
   getHashPassword = (password: string) => {
     const salt = genSaltSync(10);
@@ -85,6 +85,7 @@ export class UsersService {
       address,
       role,
       isActived: false,
+      hr: HRStatus.INACTIVE
     });
     return newRegister;
   }
@@ -95,66 +96,78 @@ export class UsersService {
     const defaultLimit = limit || 10;
 
     try {
-        // Sử dụng aggregation để bỏ qua middleware
-        const [result] = await this.userModel.aggregate([
-            // Stage 1: Match với điều kiện search
-            {
-                $match: {
-                    ...(filter.email && { email: { $regex: filter.email, $options: 'i' } }),
-                    ...(filter.name && { name: { $regex: filter.name, $options: 'i' } }),
-                    ...(filter.role && { role: new mongoose.Types.ObjectId(filter.role) }),
-                    ...(filter.isActived !== undefined && { isActived: filter.isActived })
-                }
+      // Sử dụng aggregation để bỏ qua middleware
+      const [result] = await this.userModel
+        .aggregate([
+          // Stage 1: Match với điều kiện search
+          {
+            $match: {
+              ...(filter.email && {
+                email: { $regex: filter.email, $options: 'i' },
+              }),
+              ...(filter.name && {
+                name: { $regex: filter.name, $options: 'i' },
+              }),
+              ...(filter.role && {
+                role: new mongoose.Types.ObjectId(filter.role),
+              }),
+              ...(filter.isActived !== undefined && {
+                isActived: filter.isActived,
+              }),
             },
-            
-            // Stage 2: Facet để lấy cả total và data
-            {
-                $facet: {
-                    metadata: [{ $count: "total" }],
-                    data: [
-                        { $skip: offset },
-                        { $limit: defaultLimit },
-                        // Populate role
-                        {
-                            $lookup: {
-                                from: 'roles',
-                                localField: 'role',
-                                foreignField: '_id',
-                                as: 'roleInfo'
-                            }
-                        },
-                        { $unwind: { path: '$roleInfo', preserveNullAndEmptyArrays: true } },
-                        // Remove password
-                        {
-                            $project: {
-                                password: 0
-                            }
-                        }
-                    ]
-                }
-            }
-        ]).exec();
+          },
 
-        const totalItems = result.metadata[0]?.total || 0;
-        const totalPages = Math.ceil(totalItems / defaultLimit);
-
-        console.log('Total found:', totalItems);
-        console.log('Data length:', result.data.length);
-
-        return {
-            meta: {
-                current: currentPage,
-                pageSize: limit,
-                pages: totalPages,
-                total: totalItems
+          // Stage 2: Facet để lấy cả total và data
+          {
+            $facet: {
+              metadata: [{ $count: 'total' }],
+              data: [
+                { $skip: offset },
+                { $limit: defaultLimit },
+                // Populate role
+                {
+                  $lookup: {
+                    from: 'roles',
+                    localField: 'role',
+                    foreignField: '_id',
+                    as: 'roleInfo',
+                  },
+                },
+                {
+                  $unwind: {
+                    path: '$roleInfo',
+                    preserveNullAndEmptyArrays: true,
+                  },
+                },
+                // Remove password
+                {
+                  $project: {
+                    password: 0,
+                  },
+                },
+              ],
             },
-            result: result.data
-        };
+          },
+        ])
+        .exec();
+
+      const totalItems = result.metadata[0]?.total || 0;
+      const totalPages = Math.ceil(totalItems / defaultLimit);
+
+      return {
+        meta: {
+          current: currentPage,
+          pageSize: limit,
+          pages: totalPages,
+          total: totalItems,
+        },
+        result: result.data,
+      };
     } catch (error) {
-        console.error('Error in findAll:', error);
-        throw error;
+      console.error('Error in findAll:', error);
+      throw error;
     }
-}
+  }
   async findOne(id: string) {
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
 
@@ -199,13 +212,12 @@ export class UsersService {
     }
 
     try {
-      // Bỏ bước lọc dữ liệu, update trực tiếp
       const updated = await this.userModel
         .findByIdAndUpdate(
           _id,
           {
             $set: {
-              ...updateUserDto, // sử dụng trực tiếp updateUserDto
+              ...updateUserDto,
               updatedBy: {
                 _id: user._id,
                 email: user.email,
@@ -217,7 +229,8 @@ export class UsersService {
             runValidators: true,
           },
         )
-        .select('-password -email');
+        .select('-password -email')
+        .populate('role', ['_id', 'name']); // Thêm populate cho role
 
       if (!updated) {
         throw new BadRequestException('Update failed');
@@ -272,4 +285,14 @@ export class UsersService {
   activeAccount = async (email: string, status: boolean) => {
     return await this.userModel.updateOne({ email }, { isActived: status });
   };
+
+  async findByIds(userIds: Types.ObjectId[] | string[]) {
+    return this.userModel.find({
+      _id: {
+        $in: userIds.map(id =>
+          typeof id === 'string' ? new Types.ObjectId(id) : id
+        )
+      }
+    }).select('email');
+  }
 }

@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsEmail,
+  IsEnum,
   IsMongoId,
   IsNotEmpty,
   IsOptional,
@@ -11,6 +12,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import mongoose from 'mongoose';
+import { HRStatus } from '../schemas/user.schema';
 
 //data transfer object // class = { }
 
@@ -57,6 +59,10 @@ export class CreateUserDto {
   @Min(0, { message: 'Premium không được là số âm' })
   premium: number;
 
+  @IsOptional()
+  @IsEnum(HRStatus, { message: 'HR status phải là một trong ACTIVE, INACTIVE, hoặc ON_LEAVE' })
+  hr: HRStatus = HRStatus.INACTIVE;
+
   // @IsNotEmpty({ message: 'Role không được để trống' })
   // @IsMongoId({ message: 'Role có định dạng là mongo id' })
   // role: mongoose.Schema.Types.ObjectId;
@@ -91,6 +97,10 @@ export class RegisterUserDto {
 
   @IsNotEmpty({ message: 'Address không được để trống' })
   address: string;
+
+  @IsOptional()
+  @IsEnum(HRStatus, { message: 'HR status phải là một trong ACTIVE, INACTIVE, hoặc ON_LEAVE' })
+  hr: HRStatus = HRStatus.INACTIVE;
 
   // @IsMongoId({ message: 'Role có định dạng là mongo id' })
   // role: mongoose.Schema.Types.ObjectId;

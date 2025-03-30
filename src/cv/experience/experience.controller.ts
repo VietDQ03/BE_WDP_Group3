@@ -3,7 +3,9 @@ import { ExperienceService } from './experience.service';
 import { CreateExperienceDto } from './dto/create-experience.dto';
 import { UpdateExperienceDto } from './dto/update-experience.dto';
 import { Public, ResponseMessages } from 'src/decorator/customize';
+import { ApiTags } from '@nestjs/swagger';
 
+@ApiTags('experience')
 @Controller('experience')
 export class ExperienceController {
   constructor(private readonly experienceService: ExperienceService) { }

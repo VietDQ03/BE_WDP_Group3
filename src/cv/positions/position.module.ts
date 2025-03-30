@@ -1,13 +1,13 @@
 import { Module } from '@nestjs/common';
-import { positionService } from './position.service';
-import { positionController } from './position.controller';
+import { PositionService } from './position.service';
+import { PositionController } from './position.controller';
 import { MongooseModule } from '@nestjs/mongoose';
-import { position, positionSchema } from './schemas/position.schema';
+import { Position, PositionSchema } from './schemas/position.schema';
 
 @Module({
-  imports: [MongooseModule.forFeature([{ name: position.name, schema: positionSchema }])],
-  controllers: [positionController],
-  providers: [positionService],
-  exports: [positionService]
+  imports: [MongooseModule.forFeature([{ name: Position.name, schema: PositionSchema }])],
+  controllers: [PositionController],
+  providers: [PositionService],
+  exports: [PositionService]
 })
-export class SpecializationModule { }
+export class PositionModule { }

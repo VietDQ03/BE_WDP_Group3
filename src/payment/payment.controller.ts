@@ -42,6 +42,29 @@ export class PaymentController {
       };
     }
   }
+  @Public()
+  @Get()
+  async findAll(
+    @Query('current') currentPage = 1,
+    @Query('pageSize') limit = 10,
+    @Query() qs: string
+  ) {
+    try {
+      const result = await this.paymentService.findAll(+currentPage, +limit, qs);
+      return {
+        statusCode: 200,
+        message: 'Get payments successfully',
+        data: result
+      };
+    } catch (error) {
+      this.logger.error(`Error getting payments: ${error.message}`);
+      return {
+        statusCode: 500,
+        message: 'Error getting payments',
+        error: error.message
+      };
+    }
+  }
 
   @Public()
   @Get('success')
@@ -71,7 +94,6 @@ export class PaymentController {
 
       // Kiểm tra xem có nhận đủ các tham số cần thiết không
       if (!query.vnp_ResponseCode || !query.vnp_TxnRef) {
-        this.logger.error('Missing required parameters from VNPay');
         return response.json({
           status: 'error',
           message: 'Missing required parameters',
@@ -79,7 +101,6 @@ export class PaymentController {
       }
 
       const result = await this.paymentService.handlePaymentReturn(query);
-      this.logger.log(`Payment result: ${JSON.stringify(result)}`);
 
       // Nếu thanh toán thành công
       if (
@@ -104,6 +125,35 @@ export class PaymentController {
         status: 'error',
         message: error.message,
       });
+    }
+  }
+  @Public()
+  @Get('user/:userId')
+  async findByUserId(
+    @Param('userId') userId: string,
+    @Query('current') currentPage = 1,
+    @Query('pageSize') limit = 10,
+    @Query() qs: string
+  ) {
+    try {
+      const result = await this.paymentService.findByUserId(
+        userId,
+        +currentPage,
+        +limit,
+        qs
+      );
+      return {
+        statusCode: 200,
+        message: 'Get user payments successfully',
+        data: result
+      };
+    } catch (error) {
+      this.logger.error(`Error getting user payments: ${error.message}`);
+      return {
+        statusCode: 500,
+        message: 'Error getting user payments',
+        error: error.message
+      };
     }
   }
 

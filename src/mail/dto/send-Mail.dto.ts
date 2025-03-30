@@ -29,3 +29,11 @@ export class SendResultDto {
   @IsNotEmpty({ message: 'Status không được để trống' })
   status: string;
 }
+
+export class SendInvitationDto {
+  @IsNotEmpty({ message: 'UserId không được để trống' })
+  userId: string;
+
+  @IsNotEmpty({ message: 'JobId không được để trống' })
+  jobId: string;
+}

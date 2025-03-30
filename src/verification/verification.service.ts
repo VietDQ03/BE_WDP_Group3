@@ -13,7 +13,7 @@ import { UsersService } from 'src/users/users.service';
 export class VerificationService {
 
   private readonly minRequestIntervalMinutes = 1;
-  private readonly tokenExpirationMinutes = 15;
+  private readonly tokenExpirationMinutes = 5;
   private readonly sizeOfToken = 6;
 
   constructor(

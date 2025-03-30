@@ -9,6 +9,7 @@ import { User, UserSchema } from 'src/users/schemas/user.schema';
 import { Job, JobSchema } from 'src/jobs/shemas/job.schema';
 import { UsersModule } from 'src/users/users.module';
 import { MailService } from 'src/mail/mail.service';
+import { CompaniesModule } from 'src/companies/companies.module';
 
 @Module({
   controllers: [ResumesController],
@@ -21,6 +22,7 @@ import { MailService } from 'src/mail/mail.service';
     ]),
     JobsModule,
     forwardRef(() => MailModule),
+    CompaniesModule,
   ],
   exports: [ResumesService]
 })

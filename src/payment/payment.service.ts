@@ -10,6 +10,9 @@ import {
   VNPayConfig,
   VNPayResponse,
 } from './interfaces/vnpay.interface';
+import { User, UserDocument } from 'src/users/schemas/user.schema';
+import aqp from 'api-query-params';
+import { Cron } from '@nestjs/schedule';
 @Injectable()
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
@@ -18,6 +21,7 @@ export class PaymentService {
   constructor(
     private configService: ConfigService,
     @InjectModel(Payment.name) private paymentModel: Model<PaymentDocument>,
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
   ) {
     this.vnpayConfig = {
       tmnCode: this.configService.get<string>('VNPAY_TMN_CODE'),
@@ -25,6 +29,32 @@ export class PaymentService {
       vnpUrl: this.configService.get<string>('VNPAY_URL'),
       returnUrl: this.configService.get<string>('VNPAY_RETURN_URL'),
     };
+  }
+  @Cron('*/1 * * * *')
+  private async checkAndUpdateExpiredPayments() {
+    try {
+      const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+      // const oneMinuteAgo = new Date(Date.now() - 1 * 60 * 1000); // 1 phút trước
+      const result = await this.paymentModel.updateMany(
+        {
+          status: 'pending',
+          createdAt: { $lt: fifteenMinutesAgo }
+        },
+        {
+          $set: {
+            status: 'failed',
+            responseCode: '13', // Transaction timeout
+            paymentTime: new Date() // Thêm thời gian cập nhật
+          }
+        }
+      );
+  
+      if (result.modifiedCount > 0) {
+        this.logger.log(`Updated ${result.modifiedCount} expired payments to failed status`);
+      }
+    } catch (error) {
+      this.logger.error(`Error checking expired payments: ${error.message}`);
+    }
   }
 
   private sortObject(obj: Record<string, any>): Record<string, any> {
@@ -100,7 +130,7 @@ export class PaymentService {
         vnp_Locale: 'vn',
         vnp_CurrCode: 'VND',
         vnp_TxnRef: orderId,
-        vnp_OrderInfo: `Thanh toan cho ma GD:${orderId}`,
+        vnp_OrderInfo: `${payload.orderInfo}:${orderId}`,
         vnp_OrderType: 'other',
         vnp_Amount: String(payload.amount * 100),
         vnp_ReturnUrl: this.vnpayConfig.returnUrl,
@@ -146,8 +176,7 @@ export class PaymentService {
         amount: payload.amount,
         orderInfo: vnpParams.vnp_OrderInfo,
         status: 'pending',
-        // userId: new Types.ObjectId(userId),
-        // payerId: new Types.ObjectId(userId),
+        userId: new Types.ObjectId(payload.userId),
       });
 
       return paymentUrl;
@@ -171,6 +200,7 @@ export class PaymentService {
 
   async createPayment(paymentOrder: PaymentOrder) {
     try {
+      await this.checkAndUpdateExpiredPayments();
       if (!this.vnpayConfig.tmnCode || !this.vnpayConfig.hashSecret) {
         throw new Error('Invalid VNPay configuration');
       }
@@ -191,9 +221,9 @@ export class PaymentService {
       };
     }
   }
-
   async handlePaymentReturn(vnpayResponse: VNPayResponse) {
     try {
+      await this.checkAndUpdateExpiredPayments();
       const secureHash = vnpayResponse.vnp_SecureHash;
 
       const responseParams = { ...vnpayResponse };
@@ -226,7 +256,7 @@ export class PaymentService {
 
       const orderId = vnpayResponse.vnp_TxnRef;
       const responseCode = vnpayResponse.vnp_ResponseCode;
-
+      const existingPayment = await this.paymentModel.findOne({ orderId });
       await this.paymentModel.findOneAndUpdate(
         { orderId },
         {
@@ -239,7 +269,34 @@ export class PaymentService {
         },
         { new: true },
       );
-
+      if (responseCode === '00' && existingPayment?.userId) {
+        let premiumToAdd = 0;
+  
+        // Determine premium level to add based on amount
+        const amount = existingPayment.amount;
+        if (amount === 99000) {
+          premiumToAdd = 3;
+        } else if (amount === 159000) {
+          premiumToAdd = 5;
+        } else if (amount === 299000) {
+          premiumToAdd = 10;
+        }
+  
+        if (premiumToAdd > 0) {
+          // Get current user and their premium level
+          const user = await this.userModel.findById(existingPayment.userId);
+          const currentPremium = user?.premium || 0;
+          
+          // Update premium by adding new premium to existing premium
+          await this.userModel.findByIdAndUpdate(
+            existingPayment.userId,
+            {
+              premium: currentPremium + premiumToAdd,
+            },
+            { new: true },
+          );
+        }
+      }
       return {
         status: 'success',
         data: {
@@ -256,6 +313,8 @@ export class PaymentService {
 
   async getPaymentStatus(orderId: string) {
     try {
+      await this.checkAndUpdateExpiredPayments();
+
       const payment = await this.paymentModel.findOne({ orderId });
       if (!payment) {
         return {
@@ -327,6 +386,210 @@ export class PaymentService {
         status: 'error',
         message: error.message,
       };
+    }
+  }
+  async findAll(currentPage: number, limit: number, qs: string) {
+    try {
+      const { filter, sort, population, projection } = aqp(qs);
+      delete filter.current;
+      delete filter.pageSize;
+
+      const searchConditions: any[] = [];
+
+      // Add search conditions if needed
+      if (filter.orderId) {
+        searchConditions.push({
+          orderId: { $regex: filter.orderId, $options: 'i' },
+        });
+        delete filter.orderId;
+      }
+
+      if (filter.status) {
+        searchConditions.push({
+          status: { $regex: filter.status, $options: 'i' },
+        });
+        delete filter.status;
+      }
+
+      if (filter.amount) {
+        searchConditions.push({
+          amount: filter.amount,
+        });
+        delete filter.amount;
+      }
+
+      if (filter.month && filter.year) {
+        const month = filter.month.toString().padStart(2, '0');
+        const year = filter.year;
+        const lastDayOfMonth = new Date(+year, +filter.month, 0).getDate();
+      
+        searchConditions.push({
+          paymentTime: {
+            $gte: new Date(`${year}-${month}-01`),
+            $lte: new Date(`${year}-${month}-${lastDayOfMonth}`),
+          },
+        });
+        delete filter.month;
+        delete filter.year;
+      }
+      else if (filter.year) {
+        searchConditions.push({
+          paymentTime: {
+            $gte: new Date(`${filter.year}-01-01`),
+            $lte: new Date(`${filter.year}-12-31`),
+          },
+        });
+        delete filter.year;
+      }
+
+      if (filter.orderInfo) {
+        searchConditions.push({
+          orderInfo: { $regex: filter.orderInfo, $options: 'i' },
+        });
+        delete filter.orderInfo;
+      }
+
+      let finalFilter: any = { ...filter };
+
+      if (searchConditions.length > 0) {
+        finalFilter = {
+          ...filter,
+          $and: searchConditions,
+        };
+      }
+
+      const offset = (+currentPage - 1) * +limit;
+      const defaultLimit = +limit ? +limit : 10;
+
+      const totalItems = await this.paymentModel.countDocuments(finalFilter);
+      const totalPages = Math.ceil(totalItems / defaultLimit);
+
+      // Thêm sort theo paymentTime giảm dần (-1)
+      const defaultSort = { paymentTime: -1, ...sort };
+
+      const result = await this.paymentModel
+        .find(finalFilter)
+        .skip(offset)
+        .limit(defaultLimit)
+        .sort(defaultSort as any)
+        .populate(population)
+        .select(projection as any)
+        .exec();
+
+      return {
+        meta: {
+          current: currentPage,
+          pageSize: limit,
+          pages: totalPages,
+          total: totalItems,
+        },
+        result,
+      };
+    } catch (error) {
+      this.logger.error(`Error in findAll: ${error.message}`);
+      throw error;
+    }
+  }
+
+  async findByUserId(
+    userId: string,
+    currentPage: number,
+    limit: number,
+    qs: string,
+  ) {
+    try {
+      const { filter, sort, population, projection } = aqp(qs);
+      delete filter.current;
+      delete filter.pageSize;
+
+      const searchConditions: any[] = [{ userId: new Types.ObjectId(userId) }];
+
+      if (filter.orderId) {
+        searchConditions.push({
+          orderId: { $regex: filter.orderId, $options: 'i' },
+        });
+        delete filter.orderId;
+      }
+
+      if (filter.status) {
+        searchConditions.push({
+          status: { $regex: filter.status, $options: 'i' },
+        });
+        delete filter.status;
+      }
+
+      if (filter.amount) {
+        searchConditions.push({
+          amount: filter.amount,
+        });
+        delete filter.amount;
+      }
+
+      if (filter.orderInfo) {
+        searchConditions.push({
+          orderInfo: { $regex: filter.orderInfo, $options: 'i' },
+        });
+        delete filter.orderInfo;
+      }
+
+      // Tìm kiếm theo năm
+      if (filter.month && filter.year) {
+        const month = filter.month.toString().padStart(2, '0');
+        const year = filter.year;
+        const lastDayOfMonth = new Date(+year, +filter.month, 0).getDate();
+      
+        searchConditions.push({
+          paymentTime: {
+            $gte: new Date(`${year}-${month}-01`),
+            $lte: new Date(`${year}-${month}-${lastDayOfMonth}`),
+          },
+        });
+        delete filter.month;
+        delete filter.year;
+      }
+      // Sau đó mới tìm kiếm theo năm
+      else if (filter.year) {
+        searchConditions.push({
+          paymentTime: {
+            $gte: new Date(`${filter.year}-01-01`),
+            $lte: new Date(`${filter.year}-12-31`),
+          },
+        });
+        delete filter.year;
+      }
+
+      const finalFilter = {
+        ...filter,
+        $and: searchConditions,
+      };
+
+      const offset = (+currentPage - 1) * +limit;
+      const defaultLimit = +limit ? +limit : 10;
+
+      const totalItems = await this.paymentModel.countDocuments(finalFilter);
+      const totalPages = Math.ceil(totalItems / defaultLimit);
+
+      const result = await this.paymentModel
+        .find(finalFilter)
+        .skip(offset)
+        .limit(defaultLimit)
+        .sort(sort as any)
+        .populate(population)
+        .select(projection as any)
+        .exec();
+
+      return {
+        meta: {
+          current: currentPage,
+          pageSize: limit,
+          pages: totalPages,
+          total: totalItems,
+        },
+        result,
+      };
+    } catch (error) {
+      this.logger.error(`Error in findByUserId: ${error.message}`);
+      throw error;
     }
   }
 }

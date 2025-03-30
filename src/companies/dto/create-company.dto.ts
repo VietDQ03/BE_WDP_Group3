@@ -8,7 +8,7 @@ export class CreateCompanyDto {
   address: string;
   @IsNotEmpty()
   description: string;
-  @IsNotEmpty({ message: 'Logo không được để trống', })
+  @IsOptional({ message: 'Logo không được để trống', })
   logo: string;
   @IsOptional()
   isActive: boolean

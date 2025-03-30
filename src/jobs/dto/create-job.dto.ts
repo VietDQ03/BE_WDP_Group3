@@ -1,5 +1,6 @@
+import { Prop } from '@nestjs/mongoose';
 import { Transform, Type } from 'class-transformer';
-import { IsArray, IsBoolean, IsDate, IsNotEmpty, IsNotEmptyObject, IsObject, IsString, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsDate, IsMongoId, IsNotEmpty, IsNotEmptyObject, IsObject, IsString, ValidateNested } from 'class-validator';
 import mongoose from 'mongoose';
 
 //data transfer object // class = { }
@@ -21,17 +22,21 @@ export class CreateJobDto {
     @IsNotEmpty({ message: 'name không được để trống', })
     name: string;
 
-    @IsNotEmpty({ message: 'skills không được để trống', })
-    @IsArray({ message: 'skills có định dạng là array', })
-    // "each" tells class-validator to run the validation on each item of the array
-    @IsString({ each: true, message: "skill định dạng là string" })
-    skills: string[];
+    // @IsNotEmpty({ message: 'skills không được để trống', })
+    // @IsArray({ message: 'skills có định dạng là array', })
+    // // "each" tells class-validator to run the validation on each item of the array
+    // @IsString({ each: true, message: "skill định dạng là string" })
+    // skills: string[];
 
-    @IsNotEmptyObject()
-    @IsObject()
-    @ValidateNested()
-    @Type(() => Company)
-    company: Company;
+    @IsNotEmpty({ message: 'skills không được để trống' })
+    @IsArray({ message: 'skill có định dạng là array' })
+    @IsString({ each: true, message: 'Mỗi skill phải là string' })
+    @IsMongoId({ each: true, message: 'each skill là mongo object id' })
+    skills: mongoose.Schema.Types.ObjectId[];
+
+    @IsNotEmpty()
+    @IsMongoId()
+    company: mongoose.Schema.Types.ObjectId;
 
     @IsNotEmpty({ message: 'location không được để trống', })
     location: string;

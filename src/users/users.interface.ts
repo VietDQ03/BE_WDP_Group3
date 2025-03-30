@@ -1,3 +1,5 @@
+import { HRStatus } from "./schemas/user.schema";
+
 export interface IUser {
   _id: string;
   name: string;
@@ -19,4 +21,5 @@ export interface IUser {
   premium: number;
   isDeleted: boolean;
   isActived: boolean;
+  hr: HRStatus;
 }

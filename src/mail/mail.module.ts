@@ -47,10 +47,9 @@ import { Resume, ResumeSchema } from 'src/resumes/schemas/resume.schema';
     ]),
     UsersModule,
     VerificationModule,
-    JobsModule,
+    forwardRef(() => JobsModule), // Thêm forwardRef ở đây!
     forwardRef(() => ResumesModule),
     CompaniesModule
-
   ],
   controllers: [MailController],
   providers: [MailService],

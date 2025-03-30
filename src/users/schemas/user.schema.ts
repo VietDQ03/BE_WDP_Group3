@@ -4,7 +4,11 @@ import { Company } from 'src/companies/schemas/company.schemas';
 import { Role } from 'src/roles/schemas/role.schema';
 
 export type UserDocument = HydratedDocument<User>;
-
+export enum HRStatus {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  ON_LEAVE = 'ON_LEAVE',
+}
 @Schema({
     timestamps: true,
     toJSON: {
@@ -15,6 +19,7 @@ export type UserDocument = HydratedDocument<User>;
       }
     }
 })
+
 export class User {
     @Prop()
     name: string;
@@ -54,6 +59,9 @@ export class User {
 
     @Prop({ type: Number, default: 2 }) // Sửa lại định nghĩa này
     premium: number;
+
+    @Prop({ type: String, enum: HRStatus })
+    hr: HRStatus;
 
     @Prop({ type: Object })
     createdBy: {

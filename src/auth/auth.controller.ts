@@ -15,23 +15,25 @@ import { LocalAuthGuard } from './guards/local-auth/local-auth.guard';
 import { RegisterUserDto, UserLoginDto } from 'src/users/dto/create-user.dto';
 import { Request, Response } from 'express';
 import { IUser } from 'src/users/users.interface';
-import { GoogleAuthGuard } from "./guards/google-auth/google-auth.guard";
+import { GoogleAuthGuard } from './guards/google-auth/google-auth.guard';
 import { RolesService } from 'src/roles/roles.service';
 import { ApiBody, ApiTags } from '@nestjs/swagger';
 import { ValidateOtpDto } from 'src/verification/dto/create-verification.dto';
 import { JwtAuthGuard } from './guards/jwt-auth/jwt-auth.guard';
 import { ChangePasswordDto, ForgetPasswordDto } from './dto/changePassword.dto';
+import { UsersService } from 'src/users/users.service';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   constructor(
     private authService: AuthService,
     private rolesService: RolesService,
+    private userService: UsersService,
   ) { }
 
   @Public()
   @UseGuards(LocalAuthGuard)
-  @ApiBody({ type: UserLoginDto, })
+  @ApiBody({ type: UserLoginDto })
   @Post('/login')
   @ResponseMessages('User Login')
   handleLogin(@Req() req, @Res({ passthrough: true }) response: Response) {
@@ -46,9 +48,11 @@ export class AuthController {
   @Public()
   @UseGuards(GoogleAuthGuard)
   @Get('google/callback')
-  async googleCallback(@Req() req, @Res({ passthrough: true }) response: Response) {
+  async googleCallback(@Req() req, @Res() res: Response) {
+    const token = await this.authService.login(req.user, res);
 
-    return this.authService.login(req.user, response)
+    const frontendURL = 'http://localhost:3000';
+    res.redirect(`${frontendURL}?token=${token}`);
   }
 
   @Public()
@@ -62,8 +66,37 @@ export class AuthController {
   @Get('/account')
   async handleGetAccount(@UserS() user: IUser) {
     const temp = (await this.rolesService.findOne(user.role._id)) as any;
-    user.permissions = temp.permissions;
-    return { user };
+    const userData = (await this.userService.findOne(user._id)) as any;
+    const {
+      _id,
+      name,
+      email,
+      role,
+      age,
+      gender,
+      company,
+      address,
+      isDeleted,
+      isActived,
+      permissions = temp.permissions,
+      hr
+    } = userData;
+    return {
+      user: {
+        _id,
+        name,
+        email,
+        role,
+        age,
+        company,
+        gender,
+        address,
+        permissions,
+        isDeleted,
+        isActived,
+        hr
+      }
+    };
   }
 
   @Public()
@@ -86,17 +119,25 @@ export class AuthController {
     return this.authService.logout(response, user);
   }
 
+  // @Public()
+  // @Get('/active')
+  // async activeAccount(
+  //   @Query('email') email: string,
+  //   @Query('otp') otp: string,
+  //   @Res() response: Response
+  // ) {
+  //   const { redirectUrl } = await this.authService.activeAccount(email, otp);
+  //   response.redirect(redirectUrl);
+  // }
   @Public()
-  @Get('/active')
-  async activeAccount(
-    @Query('email') email: string,
-    @Query('otp') otp: string,
-    @Res() response: Response
-  ) {
-    const { redirectUrl } = await this.authService.activeAccount(email, otp);
-    response.redirect(redirectUrl);
+  @Post('/active')
+  async activeAccount(@Body() validateOtpDto: ValidateOtpDto) {
+    const msg = this.authService.activeAccount(
+      validateOtpDto.email,
+      validateOtpDto.otp,
+    );
+    return msg;
   }
-
   @UseGuards(JwtAuthGuard)
   @Post('/change-password')
   async changePassword(
@@ -106,12 +147,9 @@ export class AuthController {
     return this.authService.changePassword(user._id, changePasswordDto);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @Public()
   @Post('/forget')
-  async forgetPassword(
-    @UserS() user: IUser,
-    @Body() forgetPasswordDto: ForgetPasswordDto,
-  ) {
-    return this.authService.forgetPassword(user._id, forgetPasswordDto);
+  async forgetPassword(@Body() forgetPasswordDto: ForgetPasswordDto) {
+    return this.authService.forgetPassword(forgetPasswordDto);
   }
 }

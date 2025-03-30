@@ -12,9 +12,9 @@ export class ChangePasswordDto {
 }
 
 export class ForgetPasswordDto {
+
     @IsString()
-    // @MinLength(6)
-    oldPassword: string;
+    email: string;
 
     @IsString()
     @MinLength(6)

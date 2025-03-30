@@ -1,40 +1,37 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import mongoose, { HydratedDocument } from 'mongoose';
+import { Skill } from '../skills/schemas/skill.schema';
+import { Position } from '../positions/schemas/position.schema';
+import { Experience } from '../experience/schemas/experience.schema';
+import { User } from 'src/users/schemas/user.schema';
 
 export type CvDocument = HydratedDocument<Cv>;
 
 @Schema({ timestamps: true })
 export class Cv {
-    @Prop()
+    @Prop({ type: mongoose.Schema.Types.ObjectId, ref: User.name })
     user_id: mongoose.Schema.Types.ObjectId
     @Prop()
     url: string;
-    @Prop()
+    @Prop({ type: [mongoose.Schema.Types.ObjectId], ref: Position.name })
     position: mongoose.Schema.Types.ObjectId[];
 
     @Prop()
-    specialPosition: string[];
+    description: string;
 
-    @Prop()
-    skill: mongoose.Schema.Types.ObjectId;
+    @Prop({ type: [mongoose.Schema.Types.ObjectId], ref: Skill.name })
+    skill: mongoose.Schema.Types.ObjectId[];
 
-    @Prop()
+    @Prop({ type: mongoose.Schema.Types.ObjectId, ref: Experience.name })
     experience: mongoose.Schema.Types.ObjectId;
-
-    @Prop()
-    salary: number;
-
-    @Prop()
-    location: mongoose.Schema.Types.ObjectId;
-
-    @Prop()
-    isJobChangeable: boolean
 
     @Prop()
     createdAt: Date;
 
     @Prop()
     updatedAt: Date;
+    @Prop()
+    isActive: boolean;
 
     @Prop()
     isDeleted: boolean;

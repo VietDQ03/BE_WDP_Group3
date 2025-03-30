@@ -1,9 +1,19 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+} from '@nestjs/common';
 import { SkillsService } from './skills.service';
 import { CreateSkillDto } from './dto/create-skill.dto';
 import { UpdateSkillDto } from './dto/update-skill.dto';
 import { Public, ResponseMessages } from 'src/decorator/customize';
-
+import { ApiTags } from '@nestjs/swagger';
+@ApiTags('skills')
 @Controller('skills')
 export class SkillsController {
   constructor(private readonly skillService: SkillsService) { }
@@ -16,7 +26,7 @@ export class SkillsController {
 
   @Public()
   @Get()
-  @ResponseMessages('Fetch position with pagination')
+  @ResponseMessages('Fetch skill with pagination')
   findAll(
     @Query('current') currentPage: string,
     @Query('pageSize') limit: string,
@@ -27,7 +37,7 @@ export class SkillsController {
 
   @Public()
   @Get(':id')
-  @ResponseMessages('Fetch a position by id')
+  @ResponseMessages('Fetch a skill by id')
   findOne(@Param('id') id: string) {
     return this.skillService.findOne(id);
   }

@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 export type PaymentDocument = Payment & Document;
 
@@ -14,7 +14,11 @@ export class Payment {
   @Prop({ required: true })
   orderInfo: string;
 
-  @Prop({ default: 'pending' })
+  @Prop({ 
+    required: true, 
+    enum: ['pending', 'success', 'failed', 'cancelled'],
+    default: 'pending'
+  })
   status: string;
 
   @Prop()
@@ -31,6 +35,13 @@ export class Payment {
 
   @Prop()
   paymentTime?: Date;
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true }) // Thêm reference tới User
+  userId: Types.ObjectId;
+
+  // @Prop({ type: Types.ObjectId, ref: 'User', required: true }) // Người thanh toán
+  // payerId: Types.ObjectId;
+  @Prop({ type: Date, default: Date.now })
+  createdAt: Date;
 }
 
 export const PaymentSchema = SchemaFactory.createForClass(Payment);

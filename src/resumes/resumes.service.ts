@@ -3,6 +3,7 @@ import {
   forwardRef,
   Inject,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
 import { UpdateResumeDto } from './dto/update-resume.dto';
 import { CreateResumeDto, CreateUserCvDto } from './dto/create-resume.dto';
@@ -16,6 +17,8 @@ import { MailService } from 'src/mail/mail.service';
 import { JobsService } from 'src/jobs/jobs.service';
 import { User, UserDocument } from 'src/users/schemas/user.schema';
 import { Job, JobDocument } from 'src/jobs/shemas/job.schema';
+import { CompaniesService } from 'src/companies/companies.service';
+import { CompanyDocument } from 'src/companies/schemas/company.schemas';
 
 @Injectable()
 export class ResumesService {
@@ -29,40 +32,159 @@ export class ResumesService {
     private jobService: JobsService,
     @Inject(forwardRef(() => MailService))
     private mailService: MailService,
-  ) {}
+    private companiesService: CompaniesService,
+  ) { }
+  // async create(createUserCvDto: CreateUserCvDto, user: IUser) {
+  //   const { url, jobId, description } = createUserCvDto;
+  //   const { email, _id } = user;
+
+  //   // Check job exists
+  //   const job = await this.jobService.findOne(jobId.toString());
+  //   if (!job) {
+  //     throw new NotFoundException('Job not found');
+  //   }
+
+  //   // Check company exists
+  //   const company = await this.companiesService.findOne(
+  //     (job.company as any)._id.toString()
+  //   );
+  //   if (!company) {
+  //     throw new NotFoundException('Company not found');
+  //   }
+
+  //   // Check if user already has a PENDING or PASSCV resume for this job
+  //   const existingResume = await this.resumeModel.findOne({
+  //     userId: _id,
+  //     jobId: jobId,
+  //     status: { $in: ['PENDING', 'PASSCV'] }
+  //   });
+
+  //   if (existingResume) {
+  //     let errorMessage = '';
+  //     if (existingResume.status === 'PENDING') {
+  //       errorMessage = 'Bạn đã có một CV đang chờ duyệt cho công việc này';
+  //     } else if (existingResume.status === 'PASSCV') {
+  //       errorMessage = 'CV của bạn đã được chấp nhận cho công việc này, bạn sẽ chờ HR gọi phỏng vấn';
+  //     }
+  //     throw new BadRequestException(errorMessage);
+  //   }
+
+  //   // Create new resume if validation passes
+  //   const newCV = await this.resumeModel.create({
+  //     url,
+  //     companyId: company._id,
+  //     description,
+  //     email,
+  //     jobId,
+  //     userId: _id,
+  //     status: 'PENDING',
+  //     createdBy: { _id, email },
+  //     history: [
+  //       {
+  //         status: 'PENDING',
+  //         updatedAt: new Date(),
+  //         updatedBy: {
+  //           _id: user._id,
+  //           email: user.email,
+  //         },
+  //       },
+  //     ],
+  //   });
+
+  //   //list hr of company
+  //   const listHr = await this.userModel.find({
+  //     'company._id': company._id.toString(),
+  //     isDeleted: false,
+  //   });
+
+
+  //   //send mail to hr
+  //   await Promise.all(
+  //     listHr.map(async (hr) => {
+  //       try {
+  //         await this.mailService.sendMailToHR(hr._id.toString(), company.name);
+  //       } catch (error) {
+  //         throw new BadRequestException(error)
+  //       }
+  //     })
+  //   );
+
+  //   // Send emails
+  //   await this.mailService.sendRusumeMail(user._id, createUserCvDto.jobId.toString());
+
+  //   return {
+  //     _id: newCV?._id,
+  //     createdAt: newCV?.createdAt,
+  //   };
+  // }
   async create(createUserCvDto: CreateUserCvDto, user: IUser) {
     const { url, jobId, description } = createUserCvDto;
     const { email, _id } = user;
-    const job = await this.jobService.findOne(jobId.toString());
 
-    const newCV = await this.resumeModel.create({
-      url,
-      companyId: job.company._id,
-      description,
-      email,
-      jobId,
-      userId: _id,
-      status: 'PENDING',
-      createdBy: { _id, email },
-      history: [
-        {
-          status: 'PENDING',
-          updatedAt: new Date(),
-          updatedBy: {
-            _id: user._id,
-            email: user.email,
-          },
-        },
-      ],
+    // Thực hiện các operation check song song
+    const [job, existingResume] = await Promise.all([
+        this.jobService.findOne(jobId.toString()),
+        this.resumeModel.findOne({
+            userId: _id,
+            jobId: jobId,
+            status: { $in: ['PENDING', 'PASSCV'] }
+        })
+    ]);
+
+    if (!job) {
+        throw new NotFoundException('Job not found');
+    }
+
+    if (existingResume) {
+        const errorMessage = existingResume.status === 'PENDING' 
+            ? 'Bạn đã có một CV đang chờ duyệt cho công việc này'
+            : 'CV của bạn đã được chấp nhận cho công việc này, bạn sẽ chờ HR gọi phỏng vấn';
+        throw new BadRequestException(errorMessage);
+    }
+
+    const company = await this.companiesService.findOne((job.company as any)._id.toString());
+    if (!company) {
+        throw new NotFoundException('Company not found');
+    }
+
+    // Create new CV và get list HR song song
+    const [newCV, listHr] = await Promise.all([
+        this.resumeModel.create({
+            url,
+            companyId: company._id,
+            description,
+            email,
+            jobId,
+            userId: _id,
+            status: 'PENDING',
+            createdBy: { _id, email },
+            history: [{
+                status: 'PENDING',
+                updatedAt: new Date(),
+                updatedBy: { _id: user._id, email: user.email },
+            }],
+        }),
+        this.userModel.find({
+            'company._id': company._id.toString(),
+            isDeleted: false,
+        }, { _id: 1 }) // Chỉ lấy _id
+    ]);
+
+    // Gửi email bất đồng bộ - không chờ đợi
+    setImmediate(() => {
+        Promise.all([
+            ...listHr.map(hr => this.mailService.sendMailToHR(hr._id.toString(), company.name)
+                .catch(err => console.error(`Failed to send email to HR ${hr._id}:`, err))),
+            this.mailService.sendRusumeMail(user._id, jobId.toString())
+                .catch(err => console.error(`Failed to send resume email to user ${user._id}:`, err))
+        ]);
     });
-    this.mailService.sendRusumeMail(user._id, createUserCvDto.jobId.toString());
 
     return {
-      _id: newCV?._id,
-      createdAt: newCV?.createdAt,
+        _id: newCV?._id,
+        createdAt: newCV?.createdAt,
     };
-  }
-
+}
   async findAll(currentPage: number, limit: number, qs: string) {
     const { filter, sort, population } = aqp(qs);
     delete filter.current;
@@ -192,10 +314,10 @@ export class ResumesService {
       const job = await this.jobModel.findOneAndUpdate(
         {
           _id: resume.jobId,
-          quantity: { $gt: 0 }
+          quantity: { $gt: 0 },
         },
         { $inc: { quantity: -1 } },
-        { new: true }
+        { new: true },
       );
 
       if (!job) {
@@ -204,17 +326,22 @@ export class ResumesService {
 
       // If job quantity becomes 0, handle pending resumes
       if (job.quantity === 0) {
+        await this.jobModel.findOneAndUpdate(
+          {
+            _id: resume.jobId,
+          },
+          { isActive: false },
+        );
         const pendingResumes = await this.resumeModel.find({
           jobId: resume.jobId,
-          status: 'PENDING'
+          status: { $in: ['PENDING', 'PASSCV'] }, // Changed here to include both statuses
         });
 
         if (pendingResumes.length > 0) {
-          // Update all pending resumes to rejected status
           const bulkRejectUpdate = this.resumeModel.updateMany(
-            { 
-              jobId: resume.jobId, 
-              status: 'PENDING' 
+            {
+              jobId: resume.jobId,
+              status: { $in: ['PENDING', 'PASSCV'] }, // Changed here to include both statuses
             },
             {
               status: 'REJECTED',
@@ -232,19 +359,17 @@ export class ResumesService {
                   },
                 },
               },
-            }
+            },
           );
 
-          // Prepare rejection emails
-          const sendRejectionEmails = pendingResumes.map(pendingResume => 
+          const sendRejectionEmails = pendingResumes.map((pendingResume) =>
             this.mailService.sendResultResumeMail({
               userId: pendingResume.userId.toString(),
               resumeId: pendingResume._id.toString(),
-              status: 'REJECTED'
-            })
+              status: 'REJECTED',
+            }),
           );
 
-          // Execute updates and send emails concurrently
           await Promise.all([bulkRejectUpdate, ...sendRejectionEmails]);
         }
       }
@@ -256,12 +381,12 @@ export class ResumesService {
       this.mailService.sendResultResumeMail({
         userId: resume.userId.toString(),
         resumeId: _id,
-        status
-      })
+        status,
+      }),
     ]);
 
     return updated;
-}
+  }
   async remove(id: string, user: IUser) {
     await this.resumeModel.updateOne(
       { _id: id },

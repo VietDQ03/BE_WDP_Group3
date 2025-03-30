@@ -1,9 +1,20 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+} from '@nestjs/common';
 import { CategoriesService } from './categories.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { Public, ResponseMessages } from 'src/decorator/customize';
+import { ApiTags } from '@nestjs/swagger';
 
+@ApiTags('categories')
 @Controller('categories')
 export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) { }
@@ -16,7 +27,7 @@ export class CategoriesController {
 
   @Public()
   @Get()
-  @ResponseMessages('Fetch location with pagination')
+  @ResponseMessages('Fetch categories with pagination')
   findAll(
     @Query('current') currentPage: string,
     @Query('pageSize') limit: string,
@@ -27,7 +38,7 @@ export class CategoriesController {
 
   @Public()
   @Get(':id')
-  @ResponseMessages('Fetch a experience_level by id')
+  @ResponseMessages('Fetch a category by id')
   findOne(@Param('id') id: string) {
     return this.categoriesService.findOne(id);
   }
@@ -39,7 +50,10 @@ export class CategoriesController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateCategoryDto: UpdateCategoryDto) {
+  update(
+    @Param('id') id: string,
+    @Body() updateCategoryDto: UpdateCategoryDto,
+  ) {
     return this.categoriesService.update(+id, updateCategoryDto);
   }
 

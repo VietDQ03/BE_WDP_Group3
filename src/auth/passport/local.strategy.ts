@@ -15,8 +15,11 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Tài khoản/ mật khẩu không đúng !');
     }
     if (!user.isActived) {
-      //FE đẩy qua trang verify nhá
-      throw new UnauthorizedException('Tài khoản của bạn chưa được xác thực');
+      throw new UnauthorizedException({
+        message: 'Tài khoản của bạn chưa được xác thực',
+        level: 'VERIFY_REQUIRED',  // hoặc có thể dùng số như level: 2
+        statusCode: 402
+      });
     }
     return user;
   }

@@ -2,24 +2,23 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { CreatePositionDto } from './dto/create-position.dto';
 import { UpdatePositionDto } from './dto/update-position.dto';
 import { InjectModel } from '@nestjs/mongoose';
-import { position, positionDocument } from './schemas/position.schema';
+import { Position, PositionDocument } from './schemas/position.schema';
 import { SoftDeleteModel } from 'soft-delete-plugin-mongoose';
 import mongoose from 'mongoose';
 import aqp from 'api-query-params';
 
 @Injectable()
-export class positionService {
+export class PositionService {
   constructor(
-    @InjectModel(position.name)
-    private positionModel: SoftDeleteModel<positionDocument>
+    @InjectModel(Position.name)
+    private positionModel: SoftDeleteModel<PositionDocument>
   ) { }
   async create(position: CreatePositionDto) {
 
-    const { name, category_id } = position;
+    const { name } = position;
 
     let newRegister = await this.positionModel.create({
       name,
-      category_id
     })
     return newRegister;
   }

@@ -42,14 +42,50 @@ export class PermissionsService {
     delete filter.current;
     delete filter.pageSize;
 
-    let offset = (+currentPage - 1) * (+limit);
-    let defaultLimit = +limit ? +limit : 10;
+    const searchConditions: any[] = [];
 
-    const totalItems = (await this.permissionModel.find(filter)).length;
+    // Thêm điều kiện tìm kiếm cho name
+    if (filter.name) {
+      searchConditions.push({
+        name: { $regex: filter.name, $options: 'i' }
+      });
+    }
+
+    // Thêm điều kiện tìm kiếm cho method
+    if (filter.method) {
+      searchConditions.push({
+        method: { $regex: filter.method, $options: 'i' }
+      });
+    }
+
+    // Thêm điều kiện tìm kiếm cho module
+    if (filter.module) {
+      searchConditions.push({
+        module: { $regex: filter.module, $options: 'i' }
+      });
+    }
+
+    // Xóa các điều kiện đã xử lý khỏi filter
+    delete filter.name;
+    delete filter.method;
+    delete filter.module;
+
+    // Tạo filter cuối cùng
+    let finalFilter: any = { ...filter };
+    if (searchConditions.length > 0) {
+      finalFilter = {
+        ...filter,
+        $and: searchConditions
+      };
+    }
+
+    const offset = (+currentPage - 1) * (+limit);
+    const defaultLimit = +limit ? +limit : 10;
+
+    const totalItems = await this.permissionModel.countDocuments(finalFilter);
     const totalPages = Math.ceil(totalItems / defaultLimit);
 
-
-    const result = await this.permissionModel.find(filter)
+    const result = await this.permissionModel.find(finalFilter)
       .skip(offset)
       .limit(defaultLimit)
       .sort(sort as any)
@@ -59,14 +95,14 @@ export class PermissionsService {
 
     return {
       meta: {
-        current: currentPage, //trang hiện tại
-        pageSize: limit, //số lượng bản ghi đã lấy
-        pages: totalPages,  //tổng số trang với điều kiện query
-        total: totalItems // tổng số phần tử (số bản ghi)
+        current: currentPage,
+        pageSize: limit,
+        pages: totalPages,
+        total: totalItems
       },
-      result //kết quả query
+      result
     }
-  }
+}
 
   async findOne(id: string) {
     if (!mongoose.Types.ObjectId.isValid(id)) {
